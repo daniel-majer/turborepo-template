@@ -1,0 +1,4 @@
+{
+  "*.{js,mjs,cjs,jsx,ts,mts,cts,tsx}": ["oxlint --fix", "oxfmt"],
+  "*.{json,jsonc,css,md,yaml,yml,html}": ["oxfmt"]
+}

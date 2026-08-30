@@ -15,6 +15,13 @@
       "cache": false,
       "persistent": true
     },
+    "//#quality": {
+      "dependsOn": ["//#lint", "//#format"]
+    },
+    "//#quality:fix": {
+      "dependsOn": ["//#lint:fix", "//#format:fix"],
+      "cache": false
+    },
     "//#lint": {},
     "//#lint:fix": {
       "cache": false

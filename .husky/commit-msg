@@ -1,0 +1,16 @@
+if ! bun x commitlint --edit "$1"; then
+  echo ""
+  echo "  Format: <type>(<scope>): <subject>"
+  echo "  Scope is required and must be one of: fe, be, tooling, deps, deps-dev"
+  echo ""
+  echo "  Examples:"
+  echo "    feat(fe): add user profile page"
+  echo "    fix(be): handle empty response from /users"
+  echo "    chore(fe): bump react to 19.3"
+  echo "    docs(be): update API endpoints documentation"
+  echo "    refactor(fe): extract auth token validation"
+  echo ""
+  echo "  More info: https://www.conventionalcommits.org"
+  echo "─────────────────────────────────────────────────────────"
+  exit 1
+fi
