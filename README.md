@@ -44,6 +44,9 @@ bun run dev          # http://localhost:3000
 | `bun run format`      | Check formatting (fails if unformatted) |
 | `bun run format:fix`  | Format the repo                         |
 
+`turbo run quality` runs lint and format together (`quality:fix` to fix). It is a
+pure aggregator with no matching script, so it works only via `turbo run`.
+
 ## Packages
 
 `apps/*` and `packages/*` are bun workspaces, referenced by name
@@ -91,6 +94,31 @@ over a plain run.
 
 oxfmt replaces Prettier, with `sortImports`, `sortTailwindcss` and
 `sortPackageJson` built in.
+
+## Git hooks
+
+Managed by husky; `prepare: husky` wires them up on every `bun install`, so a
+fresh clone needs no extra step.
+
+| Hook         | Runs                            | Scope                                        |
+| ------------ | ------------------------------- | -------------------------------------------- |
+| `pre-commit` | `lint-staged`                   | staged files only — fixes and re-stages them |
+| `commit-msg` | `commitlint`                    | message format                               |
+| `pre-push`   | `turbo run quality check-types` | whole repo, check only                       |
+
+`pre-commit` auto-fixes what it can and stages the result, so the fix lands in the
+same commit. If a lint error is not auto-fixable, it aborts and restores the
+original files. Warnings never block — only errors do.
+
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org)
+with a **required** scope:
+
+```
+<type>(<scope>): <subject>        scope ∈ fe | be | tooling | deps | deps-dev
+
+feat(fe): add user profile page
+chore(tooling): enable type-aware linting
+```
 
 ## Caching
 
