@@ -95,6 +95,24 @@ over a plain run.
 oxfmt replaces Prettier, with `sortImports`, `sortTailwindcss` and
 `sortPackageJson` built in.
 
+## Environment variables
+
+Validated with [t3-env](https://env.t3.gg) + zod. Each app owns its schema
+(`apps/fe/src/env.ts`) and its own `.env` — there is no root `.env`, so it stays
+clear which app needs what.
+
+`next.config.ts` imports the schema, so a missing or malformed variable **fails
+the build** instead of surfacing as `undefined` at runtime. Import `env` rather
+than reading `process.env` directly: server variables are then a type error in
+client components, which keeps secrets out of the browser bundle.
+
+Copy `apps/fe/.env.example` to `apps/fe/.env` to get started. `NODE_ENV` is not
+listed there — Next.js sets it from the command it runs.
+
+Server variables must also be declared in `turbo.json` under `env`, or strict
+mode filters them out and the build fails validation. `NEXT_PUBLIC_*` is inferred
+automatically.
+
 ## Git hooks
 
 Managed by husky; `prepare: husky` wires them up on every `bun install`, so a
