@@ -61,14 +61,14 @@ theme lives in `packages/ui/src/styles/globals.css`; the app imports it and only
 adds its own fonts.
 
 `@repo/ts-config` holds the tsconfig presets. Each package extends one and keeps
-only what is local (paths, includes):
+only what is local (paths, includes, source/output directories):
 
-| Preset               | Used by                                            |
-| -------------------- | -------------------------------------------------- |
-| `base.json`          | shared foundation, not used directly               |
-| `nextjs.json`        | `apps/fe`                                          |
-| `react-library.json` | `packages/ui`                                      |
-| `nestjs.json`        | `apps/be` — CommonJS, decorators, emits to `dist/` |
+| Preset               | Used by                                                       |
+| -------------------- | ------------------------------------------------------------- |
+| `base.json`          | shared foundation, not used directly                          |
+| `nextjs.json`        | `apps/fe`                                                     |
+| `react-library.json` | `packages/ui`                                                 |
+| `nestjs.json`        | `apps/be` — NodeNext, decorators; app owns `src`/`dist` paths |
 
 ## Adding a shadcn component
 
@@ -97,6 +97,16 @@ over a plain run.
 
 oxfmt replaces Prettier, with `sortImports`, `sortTailwindcss` and
 `sortPackageJson` built in.
+
+## Typed routes
+
+`next.config.ts` sets `typedRoutes: true`, so a literal `href` that does not match
+a real route is a type error rather than a runtime 404.
+
+The types come from `next typegen`, which is why `apps/fe`'s `check-types` script
+is `next typegen && tsc --noEmit`. Plain `tsc --noEmit` cannot see `LayoutProps`,
+`PageProps` or the route list — they are generated into `.next/types`, not shipped
+with the `next` package.
 
 ## Environment variables
 

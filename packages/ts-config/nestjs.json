@@ -3,8 +3,8 @@
   "display": "NestJS",
   "extends": "./base.json",
   "compilerOptions": {
-    "module": "CommonJS",
-    "moduleResolution": "Node10",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "target": "ES2023",
     "lib": ["ES2023"],
 
@@ -12,8 +12,6 @@
     "emitDecoratorMetadata": true,
 
     "noEmit": false,
-    "outDir": "./dist",
-    "rootDir": "./src",
     "sourceMap": true,
     "removeComments": true,
     "incremental": true,

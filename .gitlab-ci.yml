@@ -5,9 +5,9 @@ default:
 variables:
   # Git hooks are pointless here - CI runs the same checks directly.
   HUSKY: "0"
+  NEXT_PUBLIC_APP_URL: "http://localhost:3000"
   # --affected needs full history to diff against the target branch.
   GIT_DEPTH: "0"
-  TURBO_SCM_BASE: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
 
 check:
   interruptible: true
@@ -16,6 +16,7 @@ check:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       variables:
         AFFECTED: "--affected"
+        TURBO_SCM_BASE: $CI_MERGE_REQUEST_DIFF_BASE_SHA
     # On the default branch, --affected would compare it against itself and run
     # nothing, so check everything.
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

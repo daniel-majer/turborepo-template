@@ -5,10 +5,10 @@ import { useEffect } from "react";
 
 export default function Error({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
   useEffect(() => {
     // Replace with your error reporting service.
@@ -32,7 +32,7 @@ export default function Error({
             {error.digest}
           </code>
         ) : null}
-        <Button size="lg" className="mt-8" onClick={reset}>
+        <Button size="lg" className="mt-8" onClick={() => retry()}>
           Try again
         </Button>
       </div>

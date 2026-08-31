@@ -8,6 +8,7 @@ on:
 # Git hooks are pointless here - CI runs the same checks directly.
 env:
   HUSKY: 0
+  NEXT_PUBLIC_APP_URL: "http://localhost:3000"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -36,6 +37,8 @@ jobs:
       # On a PR, check only what changed against the base branch.
       - name: Check (pull request)
         if: github.event_name == 'pull_request'
+        env:
+          TURBO_SCM_BASE: origin/${{ github.base_ref }}
         run: bun x turbo run quality check-types build --affected
 
       # On main, --affected would compare main against itself and run nothing,
