@@ -13,7 +13,8 @@
     "lint:fix": "oxlint --fix .",
     "format": "oxfmt --check",
     "format:fix": "oxfmt .",
-    "prepare": "husky"
+    "prepare": "husky",
+    "boundaries": "turbo boundaries"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.2",
@@ -25,6 +26,9 @@
     "oxlint": "^1.80.0",
     "oxlint-tsgolint": "^7.0.2001",
     "turbo": "^2.10.12"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "packageManager": "bun@1.3.14",
   "trustedDependencies": [

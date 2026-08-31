@@ -1,0 +1,31 @@
+# GitLab equivalent of .github/workflows/ci.yml - same commands, different wrapper.
+default:
+  image: oven/bun:1.3.14
+
+variables:
+  # Git hooks are pointless here - CI runs the same checks directly.
+  HUSKY: "0"
+  # --affected needs full history to diff against the target branch.
+  GIT_DEPTH: "0"
+  TURBO_SCM_BASE: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+
+check:
+  interruptible: true
+  rules:
+    # On a merge request, check only what changed against the target branch.
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables:
+        AFFECTED: "--affected"
+    # On the default branch, --affected would compare it against itself and run
+    # nothing, so check everything.
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      variables:
+        AFFECTED: ""
+  cache:
+    key: turbo-$CI_COMMIT_REF_SLUG
+    paths:
+      - .turbo
+  script:
+    - bun install --frozen-lockfile
+    - bun x turbo run quality check-types build $AFFECTED
+    - bun x turbo boundaries

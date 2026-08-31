@@ -32,6 +32,8 @@ bun install
 bun run dev          # http://localhost:3000
 ```
 
+Node 22+ (`.nvmrc`, enforced by `engines`) and bun 1.3.14 (`packageManager`).
+
 ## Commands
 
 | Command               | What it does                            |
@@ -43,6 +45,7 @@ bun run dev          # http://localhost:3000
 | `bun run lint:fix`    | Lint and auto-fix                       |
 | `bun run format`      | Check formatting (fails if unformatted) |
 | `bun run format:fix`  | Format the repo                         |
+| `bun run boundaries`  | Check package isolation                 |
 
 `turbo run quality` runs lint and format together (`quality:fix` to fix). It is a
 pure aggregator with no matching script, so it works only via `turbo run`.
@@ -137,6 +140,40 @@ with a **required** scope:
 feat(fe): add user profile page
 chore(tooling): enable type-aware linting
 ```
+
+## CI
+
+`.github/workflows/ci.yml` and `.gitlab-ci.yml` do the same thing — the commands
+are identical, only the wrapper differs. Use whichever platform applies; the
+other file is inert.
+
+```bash
+turbo run quality check-types build --affected
+turbo boundaries
+```
+
+`--affected` limits the run to packages touched since the base branch, so it needs
+full git history (`fetch-depth: 0` / `GIT_DEPTH: 0`). The `.turbo` directory is
+cached between runs.
+
+`turbo boundaries` fails the build if a package reaches into another package's
+internals instead of going through its `exports`.
+
+`HUSKY: 0` is set in both files — git hooks are pointless in CI, which runs the
+same checks directly.
+
+### Hooks failing in a git GUI
+
+Hooks run `bun`, and GUI git clients do not load your shell profile, so `bun` may
+not be on their `PATH` (`bun: not found`). Fix it once per machine in
+`~/.config/husky/init.sh`:
+
+```sh
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+```
+
+Add your Node version manager's init there too if you use one.
 
 ## Caching
 
