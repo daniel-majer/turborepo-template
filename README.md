@@ -19,7 +19,7 @@ UI components, TypeScript configs and tooling.
 ```
 apps/
   fe/               Next.js app
-  be/               NestJS app
+  be/               NestJS app (Fastify)
 packages/
   ui/               @repo/ui        — shared React components (shadcn/ui)
   ts-config/        @repo/ts-config — shared tsconfig presets
@@ -48,8 +48,10 @@ After cloning, adjust the template to your project:
 - **`README.md`** — rewrite this file for your project.
 - **`LICENSE`** — the template is MIT-0, so you can delete or replace it freely;
   pick whatever license fits your project.
-- **`apps/be`** — a scaffolded NestJS app (ESM + vitest, port 3001). Build on it,
-  or delete the directory if you only need the frontend.
+- **`apps/be`** — a NestJS app on Fastify (ESM + vitest, port 3001) with zod-validated
+  env, a global `ValidationPipe` and a catch-all exception filter — see
+  `apps/be/README.md`. Build on it, or delete the directory if you only need the
+  frontend.
 - **`apps/fe/public/` and fonts** — swap the favicon/assets and the Geist fonts in
   `layout.tsx` for your own branding.
 - **CI** (optional) — `ci.yml` triggers on `main`; adjust for your branching model.
