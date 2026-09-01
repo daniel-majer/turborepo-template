@@ -1,0 +1,10 @@
+{
+  "extends": "@repo/ts-config/nestjs.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "isolatedModules": true,
+    "strictPropertyInitialization": false,
+    "types": ["vitest/globals", "node"]
+  },
+  "include": ["src", "test"]
+}

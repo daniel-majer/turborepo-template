@@ -19,7 +19,7 @@ UI components, TypeScript configs and tooling.
 ```
 apps/
   fe/               Next.js app
-  be/               NestJS app (not scaffolded yet)
+  be/               NestJS app
 packages/
   ui/               @repo/ui        — shared React components (shadcn/ui)
   ts-config/        @repo/ts-config — shared tsconfig presets
@@ -29,7 +29,7 @@ packages/
 
 ```bash
 bun install
-bun run dev          # http://localhost:3000
+bun run dev          # fe → http://localhost:3000, be → http://localhost:3001
 ```
 
 Node 22+ (`.nvmrc`, enforced by `engines`) and bun 1.3.14 (`packageManager`).
@@ -48,8 +48,8 @@ After cloning, adjust the template to your project:
 - **`README.md`** — rewrite this file for your project.
 - **`LICENSE`** — the template is MIT-0, so you can delete or replace it freely;
   pick whatever license fits your project.
-- **`apps/be`** — an empty placeholder for a NestJS app. Scaffold it (`nest new`)
-  or delete the directory; the `@repo/ts-config/nestjs.json` preset is ready for it.
+- **`apps/be`** — a scaffolded NestJS app (ESM + vitest, port 3001). Build on it,
+  or delete the directory if you only need the frontend.
 - **`apps/fe/public/` and fonts** — swap the favicon/assets and the Geist fonts in
   `layout.tsx` for your own branding.
 - **CI** (optional) — `ci.yml` triggers on `main`; adjust for your branching model.
