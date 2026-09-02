@@ -28,18 +28,25 @@ bun run test:cov     # unit tests with coverage
 `main.ts` bootstraps the app with `FastifyAdapter`. Fastify listens on `0.0.0.0`
 (Express-based middleware won't work — use `@fastify/*` equivalents).
 
-### Environment variables
+### Environment variables & config (`src/config/`)
 
-- Managed by `@nestjs/config` + validated with a **zod** schema in `src/env.ts`.
+- Managed by `@nestjs/config` + validated with a **zod** schema in `src/config/env.ts`.
 - The app fails fast on startup if a variable is missing or invalid.
-- Access config through the typed `ConfigService`, never `process.env`:
+- Raw env vars are grouped into typed **namespaces** via `registerAs`
+  (`src/config/app.config.ts`) and injected where needed — never use `process.env`:
 
   ```ts
-  constructor(private readonly config: ConfigService<Env, true>) {}
-  this.config.get("PORT", { infer: true }); // number
+  constructor(
+    @Inject(appConfig.KEY)
+    private readonly config: ConfigType<typeof appConfig>,
+  ) {}
+  this.config.port; // number
   ```
 
-- Add new variables to `src/env.ts` and `.env.example` (`.env` is gitignored).
+- Adding a variable: declare it in the zod schema (`src/config/env.ts`),
+  add it to `.env.example` (`.env` is gitignored), and expose it through an
+  existing or new namespace (e.g. `database.config.ts` with
+  `registerAs("database", ...)` registered in `CoreModule`'s `load: [...]`).
 
 ### Global providers (`app.module.ts`)
 

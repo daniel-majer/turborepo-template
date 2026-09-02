@@ -1,34 +1,12 @@
-import { Module, ValidationPipe } from "@nestjs/common";
-import { ConfigModule } from "@nestjs/config";
-import { APP_FILTER, APP_PIPE } from "@nestjs/core";
+import { Module } from "@nestjs/common";
 
 import { AppController } from "./app.controller.js";
 import { AppService } from "./app.service.js";
-import { AllExceptionsFilter } from "./common/all-exceptions.filter.js";
-import { validateEnv } from "./env.js";
+import { CoreModule } from "./core/core.module.js";
 
 @Module({
-  imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      validate: validateEnv,
-    }),
-  ],
+  imports: [CoreModule],
   controllers: [AppController],
-  providers: [
-    AppService,
-    {
-      provide: APP_FILTER,
-      useClass: AllExceptionsFilter,
-    },
-    {
-      provide: APP_PIPE,
-      useValue: new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
-    },
-  ],
+  providers: [AppService],
 })
 export class AppModule {}

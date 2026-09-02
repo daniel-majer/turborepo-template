@@ -20,3 +20,10 @@ export function validateEnv(config: Record<string, unknown>): Env {
 
   return result.data;
 }
+
+let cached: Env | undefined;
+
+export function getEnv(): Env {
+  cached ??= validateEnv(process.env);
+  return cached;
+}
