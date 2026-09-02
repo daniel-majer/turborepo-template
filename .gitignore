@@ -39,7 +39,11 @@ yarn-error.log*
 *.pem
 
 
+# Prisma generated client
+apps/be/src/database/generated/
+
 # Agents
 .agents
 .claude
 skills-lock.json
+*.tsbuildinfo

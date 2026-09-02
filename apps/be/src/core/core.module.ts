@@ -5,14 +5,15 @@ import { LoggerModule } from "nestjs-pino";
 
 import { AllExceptionsFilter } from "../common/all-exceptions.filter.js";
 import { TransformResponseInterceptor } from "../common/transform-response.interceptor.js";
-import { appConfig, validateEnv } from "../config/index.js";
+import { appConfig, databaseConfig, validateEnv } from "../config/index.js";
+import { DatabaseModule } from "../database/database.module.js";
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       validate: validateEnv,
-      load: [appConfig],
+      load: [appConfig, databaseConfig],
     }),
     LoggerModule.forRootAsync({
       inject: [appConfig.KEY],
@@ -42,6 +43,7 @@ import { appConfig, validateEnv } from "../config/index.js";
         },
       }),
     }),
+    DatabaseModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
