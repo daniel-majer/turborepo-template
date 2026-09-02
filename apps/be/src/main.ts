@@ -1,3 +1,4 @@
+import fastifyHelmet from "@fastify/helmet";
 import { ConfigType } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import {
@@ -13,6 +14,9 @@ async function bootstrap() {
     AppModule,
     new FastifyAdapter(),
   );
+
+  await app.register(fastifyHelmet);
+
   const config = app.get<ConfigType<typeof appConfig>>(appConfig.KEY);
   await app.listen(config.port, "0.0.0.0");
 }

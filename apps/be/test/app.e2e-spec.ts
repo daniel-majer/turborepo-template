@@ -25,7 +25,7 @@ describe("AppController (e2e)", () => {
     const res = await app.inject({ method: "GET", url: "/" });
 
     expect(res.statusCode).toBe(200);
-    expect(res.payload).toBe("Hello World!");
+    expect(res.json()).toEqual({ data: "Hello World!" });
   });
 
   afterEach(async () => {

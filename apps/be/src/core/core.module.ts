@@ -1,8 +1,9 @@
 import { Module, ValidationPipe } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
-import { APP_FILTER, APP_PIPE } from "@nestjs/core";
+import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from "@nestjs/core";
 
 import { AllExceptionsFilter } from "../common/all-exceptions.filter.js";
+import { TransformResponseInterceptor } from "../common/transform-response.interceptor.js";
 import { appConfig, validateEnv } from "../config/index.js";
 
 @Module({
@@ -15,6 +16,7 @@ import { appConfig, validateEnv } from "../config/index.js";
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    { provide: APP_INTERCEPTOR, useClass: TransformResponseInterceptor },
     {
       provide: APP_PIPE,
       useValue: new ValidationPipe({
