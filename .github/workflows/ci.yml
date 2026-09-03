@@ -9,6 +9,11 @@ on:
 env:
   HUSKY: 0
   NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+  # On a PR only run tasks for packages that changed against the base branch.
+  # On main, --affected would compare main against itself and run nothing,
+  # so run everything.
+  TURBO_AFFECTED: ${{ github.event_name == 'pull_request' && '--affected' || '' }}
+  TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -21,30 +26,29 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+      - uses: ./.github/actions/setup
 
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: package.json
-
-      - run: bun install --frozen-lockfile
-
-      - uses: actions/cache@v4
-        with:
-          path: .turbo
-          key: turbo-${{ runner.os }}-${{ github.sha }}
-          restore-keys: turbo-${{ runner.os }}-
-
-      # On a PR, check only what changed against the base branch.
-      - name: Check (pull request)
-        if: github.event_name == 'pull_request'
-        env:
-          TURBO_SCM_BASE: origin/${{ github.base_ref }}
-        run: bun x turbo run quality check-types build --affected
-
-      # On main, --affected would compare main against itself and run nothing,
-      # so check everything.
-      - name: Check (main)
-        if: github.event_name == 'push'
-        run: bun x turbo run quality check-types build
-
+      - run: bun x turbo run quality check-types build $TURBO_AFFECTED
       - run: bun x turbo boundaries
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+
+      - run: bun x turbo run test $TURBO_AFFECTED
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+
+      # apps/be/package.json `test:e2e` starts its own Postgres + Redis via
+      # docker-compose.test.yml (Docker is preinstalled on ubuntu-latest).
+      - run: bun x turbo run test:e2e $TURBO_AFFECTED

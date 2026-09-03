@@ -1,11 +1,6 @@
 import { Controller, Get, NotFoundException } from "@nestjs/common";
-import {
-  FastifyAdapter,
-  NestFastifyApplication,
-} from "@nestjs/platform-fastify";
-import { Test } from "@nestjs/testing";
 
-import { AppModule } from "./../src/app.module.js";
+import { useTestApp } from "./setup.js";
 
 @Controller("boom")
 class BoomController {
@@ -21,28 +16,10 @@ class BoomController {
 }
 
 describe("AllExceptionsFilter (e2e)", () => {
-  let app: NestFastifyApplication;
-
-  beforeEach(async () => {
-    const moduleFixture = await Test.createTestingModule({
-      imports: [AppModule],
-      controllers: [BoomController],
-    }).compile();
-
-    app = moduleFixture.createNestApplication<NestFastifyApplication>(
-      new FastifyAdapter(),
-    );
-    app.useLogger(false);
-    await app.init();
-    await app.getHttpAdapter().getInstance().ready();
-  });
-
-  afterEach(async () => {
-    await app.close();
-  });
+  const t = useTestApp({ controllers: [BoomController] });
 
   it("HttpException keeps its status and message", async () => {
-    const res = await app.inject({ method: "GET", url: "/boom/http" });
+    const res = await t.app.inject({ method: "GET", url: "/boom/http" });
     const body = res.json();
 
     expect(res.statusCode).toBe(404);
@@ -53,7 +30,7 @@ describe("AllExceptionsFilter (e2e)", () => {
   });
 
   it("unknown Error becomes a generic 500 without leaking details", async () => {
-    const res = await app.inject({ method: "GET", url: "/boom/unknown" });
+    const res = await t.app.inject({ method: "GET", url: "/boom/unknown" });
     const body = res.json();
 
     expect(res.statusCode).toBe(500);

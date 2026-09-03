@@ -22,7 +22,7 @@ export class CacheService {
     return this.cache.clear();
   }
 
-  wrap<T>(key: string, fn: () => Promise<T>, ttlMs?: number): Promise<T> {
+  wrap<T>(key: string, fn: () => T | Promise<T>, ttlMs?: number): Promise<T> {
     return this.cache.wrap(key, fn, ttlMs);
   }
 }

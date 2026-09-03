@@ -49,14 +49,20 @@ After cloning, adjust the template to your project:
 - **`LICENSE`** — the template is MIT-0, so you can delete or replace it freely;
   pick whatever license fits your project.
 - **`apps/be`** — a NestJS app on Fastify (ESM + vitest, port 3001) with zod-validated
-  env, a global `ValidationPipe` and a catch-all exception filter — see
+  env, Prisma + Postgres, a Redis cache, pino logging, a global `ValidationPipe`
+  and a catch-all exception filter. Postgres and Redis run via Docker
+  (`cp apps/be/.env.example apps/be/.env`, then `bun run dev` starts them) — see
   `apps/be/README.md`. Build on it, or delete the directory if you only need the
   frontend.
 - **`apps/fe/public/` and fonts** — swap the favicon/assets and the Geist fonts in
   `layout.tsx` for your own branding.
-- **CI** (optional) — `ci.yml` triggers on `main`; adjust for your branching model.
-  For Vercel Remote Cache add `TURBO_TOKEN`/`TURBO_TEAM` secrets, otherwise the
-  built-in `.turbo` cache via `actions/cache` just works.
+- **CI** (optional) — `ci.yml` runs three parallel jobs (checks, unit tests, e2e
+  tests) on PRs and `main`; adjust for your branching model. Shared setup lives in
+  `.github/actions/setup`. For Vercel Remote Cache add `TURBO_TOKEN`/`TURBO_TEAM`
+  secrets, otherwise the built-in `.turbo` cache via `actions/cache` just works.
+- **Deploy** — not included, every project deploys somewhere else. A typical
+  workflow runs after CI on `main`: `bun run --cwd apps/be db:deploy` against the
+  production `DATABASE_URL`, then your platform's deploy command.
 
 Everything else — `turbo.json`, git hooks, `commitlint`, the tsconfig presets and
 `components.json` — is project-agnostic and needs no changes.
@@ -73,6 +79,8 @@ Everything else — `turbo.json`, git hooks, `commitlint`, the tsconfig presets 
 | `bun run format`      | Check formatting (fails if unformatted) |
 | `bun run format:fix`  | Format the repo                         |
 | `bun run boundaries`  | Check package isolation                 |
+| `turbo run test`      | Unit tests in every package             |
+| `turbo run test:e2e`  | e2e + integration tests (needs Docker)  |
 
 `turbo run quality` runs lint and format together (`quality:fix` to fix). It is a
 pure aggregator with no matching script, so it works only via `turbo run`.

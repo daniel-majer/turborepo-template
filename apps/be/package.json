@@ -8,9 +8,12 @@
     "build": "nest build",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
+    "db:migrate:test": "NODE_ENV=test prisma migrate deploy",
     "db:studio": "prisma studio",
     "docker:up": "docker compose up -d --wait",
     "docker:down": "docker compose down",
+    "docker:test:up": "docker compose --env-file .env.test -f docker-compose.test.yml up -d --wait",
+    "docker:test:down": "docker compose --env-file .env.test -f docker-compose.test.yml down",
     "start": "node dist/main.js",
     "start:debug": "nest start --debug --watch",
     "check-types": "tsc --noEmit",
@@ -18,7 +21,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
-    "test:e2e": "vitest run --config ./vitest.config.e2e.ts"
+    "test:e2e": "bun run docker:test:up && bun run db:migrate:test && vitest run --config ./vitest.config.e2e.ts; status=$?; bun run docker:test:down; exit $status",
+    "test:e2e:watch": "vitest --config ./vitest.config.e2e.ts"
   },
   "dependencies": {
     "@fastify/helmet": "^13.1.1",

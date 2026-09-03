@@ -12,6 +12,12 @@
       "dependsOn": ["^check-types"],
       "outputs": ["tsconfig.tsbuildinfo"]
     },
+    "test": {
+      "outputs": ["coverage/**"]
+    },
+    "test:e2e": {
+      "cache": false
+    },
     "dev": {
       "cache": false,
       "persistent": true

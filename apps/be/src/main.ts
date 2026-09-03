@@ -1,13 +1,12 @@
-import fastifyHelmet from "@fastify/helmet";
 import { ConfigType } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import {
   FastifyAdapter,
   NestFastifyApplication,
 } from "@nestjs/platform-fastify";
-import { Logger } from "nestjs-pino";
 
 import { AppModule } from "./app.module.js";
+import { configureApp } from "./app.setup.js";
 import { appConfig } from "./config/index.js";
 
 async function bootstrap() {
@@ -17,9 +16,7 @@ async function bootstrap() {
     { bufferLogs: true },
   );
 
-  app.useLogger(app.get(Logger));
-
-  await app.register(fastifyHelmet);
+  await configureApp(app);
 
   const config = app.get<ConfigType<typeof appConfig>>(appConfig.KEY);
   await app.listen(config.port, "0.0.0.0");

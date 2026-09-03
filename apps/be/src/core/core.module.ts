@@ -9,6 +9,7 @@ import { TransformResponseInterceptor } from "../common/transform-response.inter
 import {
   appConfig,
   databaseConfig,
+  envFilePath,
   redisConfig,
   validateEnv,
 } from "../config/index.js";
@@ -18,6 +19,7 @@ import { DatabaseModule } from "../database/database.module.js";
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath,
       validate: validateEnv,
       load: [appConfig, databaseConfig, redisConfig],
     }),
