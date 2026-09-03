@@ -3,9 +3,15 @@ import { ConfigModule, ConfigType } from "@nestjs/config";
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from "@nestjs/core";
 import { LoggerModule } from "nestjs-pino";
 
+import { CacheModule } from "../cache/cache.module.js";
 import { AllExceptionsFilter } from "../common/all-exceptions.filter.js";
 import { TransformResponseInterceptor } from "../common/transform-response.interceptor.js";
-import { appConfig, databaseConfig, validateEnv } from "../config/index.js";
+import {
+  appConfig,
+  databaseConfig,
+  redisConfig,
+  validateEnv,
+} from "../config/index.js";
 import { DatabaseModule } from "../database/database.module.js";
 
 @Module({
@@ -13,7 +19,7 @@ import { DatabaseModule } from "../database/database.module.js";
     ConfigModule.forRoot({
       isGlobal: true,
       validate: validateEnv,
-      load: [appConfig, databaseConfig],
+      load: [appConfig, databaseConfig, redisConfig],
     }),
     LoggerModule.forRootAsync({
       inject: [appConfig.KEY],
@@ -44,6 +50,7 @@ import { DatabaseModule } from "../database/database.module.js";
       }),
     }),
     DatabaseModule,
+    CacheModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
