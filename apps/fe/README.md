@@ -1,5 +1,7 @@
 # fe
 
+<!-- TODO(template): Rewrite this app README for your project. -->
+
 Next.js frontend of the [turborepo-template](../../README.md) monorepo.
 
 Run everything from the repo root — `turbo` orchestrates the dependency graph and

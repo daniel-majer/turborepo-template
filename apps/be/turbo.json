@@ -3,7 +3,7 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**", "tsconfig.build.tsbuildinfo"]
     },
     "check-types": {
       "outputs": ["dist/tsconfig.tsbuildinfo"]

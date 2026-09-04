@@ -9,6 +9,7 @@ import { AppModule } from "../src/app.module.js";
 import { configureApp } from "../src/app.setup.js";
 import { CacheService } from "../src/cache/cache.service.js";
 import { DatabaseService } from "../src/database/database.service.js";
+import { assertSafeTestTargets } from "./safety.js";
 
 export interface TestApp {
   app: NestFastifyApplication;
@@ -79,9 +80,7 @@ function ready<T>(value: T | undefined, name: string): T {
 
 /** Truncates every table in the public schema except Prisma's migration log. */
 export async function resetDatabase(db: DatabaseService) {
-  if (process.env.NODE_ENV !== "test") {
-    throw new Error("resetDatabase() may only run with NODE_ENV=test");
-  }
+  assertSafeTestTargets();
 
   const tables = await db.$queryRaw<{ tablename: string }[]>`
     SELECT tablename FROM pg_tables

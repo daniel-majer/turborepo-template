@@ -1,17 +1,18 @@
 # Throwaway Postgres + Redis for e2e/integration tests. Runs next to the dev
 # stack on different ports and keeps no volumes, so every run starts clean.
-# Started by `bun run test:e2e` with `--env-file .env.test`.
-name: be-test
+# TODO(template): Change this together with the dev Compose project name.
+name: turborepo-template-be-test
 
 services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      # Keep these values aligned with the committed `.env.test` file.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: app_test
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "127.0.0.1:5434:5432"
     tmpfs:
       - /var/lib/postgresql/data
     healthcheck:
@@ -23,7 +24,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "${REDIS_PORT}:6379"
+      - "127.0.0.1:6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 2s

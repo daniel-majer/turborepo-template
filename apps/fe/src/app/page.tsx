@@ -1,5 +1,6 @@
 import { Button } from "@repo/ui/components/button";
 
+// TODO(template): Replace this starter page with your product UI and content.
 export default function Home() {
   return (
     <main className="flex flex-1 items-center justify-center px-6 py-24">

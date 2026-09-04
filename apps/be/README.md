@@ -16,7 +16,9 @@ bun run dev
 
 `.env.test` is committed and used by the test scripts; it points at a separate
 Docker stack (`docker-compose.test.yml`, ports 5434 / 6380) so tests never touch
-your dev data.
+your dev data. Both stacks publish only on `127.0.0.1`. Change the
+`name:` values marked `TODO(template)` in both Compose files after cloning; each
+checkout on the same Docker host must use a different pair of names.
 
 ## Scripts
 
@@ -32,7 +34,7 @@ bun run test:e2e:watch  # same tests in watch mode (start the stack yourself)
 bun run test:cov     # unit tests with coverage
 bun run docker:up    # start dev postgres + redis
 bun run docker:down  # stop them
-bun run docker:test:up    # start the throwaway test stack (.env.test)
+bun run docker:test:up    # start the throwaway test stack
 bun run docker:test:down  # remove it
 bun run db:migrate   # create/apply a migration in dev (prisma migrate dev)
 bun run db:deploy    # apply migrations in prod/CI (prisma migrate deploy)
@@ -51,7 +53,9 @@ bun run db:studio    # browse the database
 
 - Managed by `@nestjs/config` + validated with a **zod** schema in `src/config/env.ts`.
 - `.env` is loaded normally; with `NODE_ENV=test` (set automatically by vitest)
-  the app and `prisma.config.ts` load `.env.test` instead (`src/config/env-file.ts`).
+  the app and `prisma.config.ts` load `.env.test` with override semantics
+  (`src/config/env-file.ts`), so ambient `DATABASE_URL` / `REDIS_URL` values
+  cannot redirect cleanup.
 - The app fails fast on startup if a variable is missing or invalid.
 - Raw env vars are grouped into typed **namespaces** via `registerAs`
   (`src/config/app.config.ts`) and injected where needed — never use `process.env`:
@@ -80,6 +84,8 @@ bun run db:studio    # browse the database
 - Changing the schema: edit `schema.prisma`, then `bun run db:migrate`.
 - `docker-compose.yml` reads `POSTGRES_*` and `REDIS_PORT` from `.env`; the app
   itself only reads `DATABASE_URL` and `REDIS_URL`, so keep the ports in sync.
+- `docker-compose.test.yml` intentionally contains fixed disposable credentials
+  and ports. Keep them aligned with the committed `.env.test` file.
 
 ### Cache (`src/cache/`)
 
@@ -124,9 +130,10 @@ injection.
 
 ### Testing
 
-- **Unit** (`src/**/*.spec.ts`) — services only; controllers have no logic and
-  their decorators, pipes and filters are only exercised end to end. Dependencies
-  are auto-mocked with `createMock` from `@golevelup/ts-vitest`
+- **Unit** (`src/**/*.spec.ts` and `test/**/*.spec.ts`) — isolated service,
+  environment, and cleanup-safety tests; controllers have no logic and their
+  decorators, pipes and filters are only exercised end to end. Dependencies are
+  auto-mocked with `createMock` from `@golevelup/ts-vitest`
   (`.useMocker(() => createMock())`), which is deep enough for `DatabaseService`
   (`db.user.findMany.mockResolvedValue([])`). Never import `CoreModule` in a
   unit test — it connects to Postgres and Redis.
@@ -140,14 +147,17 @@ injection.
   after every test truncates all tables and clears the cache. Pass extra
   `controllers`/`providers` for the test as module metadata. Files run
   sequentially (`fileParallelism: false`) because they share one database.
+- Before cleanup, the helper requires `NODE_ENV=test`, exact Postgres and Redis
+  URLs from `.env.test`, local hostnames, and a Postgres database ending in
+  `_test`.
 - `bun run test:e2e` starts `docker-compose.test.yml`, applies migrations and
   removes the stack afterwards, so it needs Docker but no manual setup.
 
 ### CI / CD
 
-- `.github/workflows/ci.yml` runs unit tests (`turbo run test`) and e2e tests
-  (`turbo run test:e2e`, using the same Docker test stack as locally) as separate
-  jobs, only for affected packages on PRs.
+- The GitHub workflow runs unit tests (`bun x turbo run test`) and e2e
+  tests (`bun x turbo run test:e2e`, using the same Docker test stack as locally)
+  as separate jobs, only for affected packages on pull requests.
 - There is no deploy workflow (it depends on where you host). Whatever you use,
   run `bun run db:deploy` with the production `DATABASE_URL` before starting the
   new version, and build from the repo root because `be` depends on workspace

@@ -2,6 +2,9 @@
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
   "tasks": {
+    "transit": {
+      "dependsOn": ["^transit"]
+    },
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
@@ -9,11 +12,12 @@
       "env": ["NODE_ENV"]
     },
     "check-types": {
-      "dependsOn": ["^check-types"],
+      "dependsOn": ["transit"],
       "outputs": ["tsconfig.tsbuildinfo"]
     },
     "test": {
-      "outputs": ["coverage/**"]
+      "dependsOn": ["transit"],
+      "outputs": []
     },
     "test:e2e": {
       "cache": false

@@ -1,5 +1,7 @@
 # Turborepo
 
+> **TODO(template):** Complete the “Make it yours” checklist after cloning.
+
 Turborepo monorepo template with a Next.js frontend and a NestJS backend, sharing
 UI components, TypeScript configs and tooling.
 
@@ -29,6 +31,10 @@ packages/
 
 ```bash
 bun install
+cp apps/fe/.env.example apps/fe/.env
+cp apps/be/.env.example apps/be/.env
+bun run --cwd apps/be docker:up
+bun run --cwd apps/be db:migrate
 bun run dev          # fe → http://localhost:3000, be → http://localhost:3001
 ```
 
@@ -36,30 +42,35 @@ Node 22+ (`.nvmrc`, enforced by `engines`) and bun 1.3.14 (`packageManager`).
 
 ## Make it yours
 
-After cloning, adjust the template to your project:
+After cloning, resolve every `TODO(template)` marker and adjust the remaining
+files that cannot contain comments:
 
 - **`apps/fe/.env`** — create it from the example (`cp apps/fe/.env.example apps/fe/.env`).
   Without it the build fails immediately: `src/env.ts` validates `NEXT_PUBLIC_APP_URL`
-  at startup. For production, set the real URL — and update the hardcoded value in
+  at startup. For production, set the real URL — and update the hardcoded values in
   `.github/workflows/ci.yml` too.
 - **`apps/fe/src/app/layout.tsx`** — replace the template `title` and `description`
   metadata, and change `lang="en"` if the app is in another language.
-- **Root `package.json`** — rename `"turborepo-template"` to your project.
-- **`README.md`** — rewrite this file for your project.
+- **Root `package.json`** — rename `"turborepo-template"` to your project (JSON
+  does not support an inline TODO comment).
+- **README files** — rewrite the root and app-specific documentation for your
+  project.
 - **`LICENSE`** — the template is MIT-0, so you can delete or replace it freely;
   pick whatever license fits your project.
 - **`apps/be`** — a NestJS app on Fastify (ESM + vitest, port 3001) with zod-validated
   env, Prisma + Postgres, a Redis cache, pino logging, a global `ValidationPipe`
-  and a catch-all exception filter. Postgres and Redis run via Docker
-  (`cp apps/be/.env.example apps/be/.env`, then `bun run dev` starts them) — see
-  `apps/be/README.md`. Build on it, or delete the directory if you only need the
-  frontend.
+  and a catch-all exception filter. Postgres and Redis run via Docker; the quick
+  start above creates the backend env, starts both services, and applies the
+  Prisma migrations before `bun run dev` — see `apps/be/README.md`. Build on it,
+  or delete the directory if you only need the frontend.
 - **`apps/fe/public/` and fonts** — swap the favicon/assets and the Geist fonts in
   `layout.tsx` for your own branding.
 - **CI** (optional) — `ci.yml` runs three parallel jobs (checks, unit tests, e2e
   tests) on PRs and `main`; adjust for your branching model. Shared setup lives in
-  `.github/actions/setup`. For Vercel Remote Cache add `TURBO_TOKEN`/`TURBO_TEAM`
-  secrets, otherwise the built-in `.turbo` cache via `actions/cache` just works.
+  `.github/actions/setup`. For Vercel Remote Cache, add `TURBO_TOKEN` as a GitHub
+  Actions repository secret and `TURBO_TEAM` as a repository variable. The
+  workflow exposes both to Turbo; without them, the built-in `.turbo` cache via
+  `actions/cache` still works.
 - **Deploy** — not included, every project deploys somewhere else. A typical
   workflow runs after CI on `main`: `bun run --cwd apps/be db:deploy` against the
   production `DATABASE_URL`, then your platform's deploy command.
@@ -69,21 +80,23 @@ Everything else — `turbo.json`, git hooks, `commitlint`, the tsconfig presets 
 
 ## Commands
 
-| Command               | What it does                            |
-| --------------------- | --------------------------------------- |
-| `bun run dev`         | Start all dev servers                   |
-| `bun run build`       | Build all apps                          |
-| `bun run check-types` | Type-check every package                |
-| `bun run lint`        | Lint the whole repo                     |
-| `bun run lint:fix`    | Lint and auto-fix                       |
-| `bun run format`      | Check formatting (fails if unformatted) |
-| `bun run format:fix`  | Format the repo                         |
-| `bun run boundaries`  | Check package isolation                 |
-| `turbo run test`      | Unit tests in every package             |
-| `turbo run test:e2e`  | e2e + integration tests (needs Docker)  |
+| Command                       | What it does                            |
+| ----------------------------- | --------------------------------------- |
+| `bun run dev`                 | Start all dev servers                   |
+| `bun run build`               | Build all apps                          |
+| `bun run check-types`         | Type-check every package                |
+| `bun run lint`                | Lint the whole repo                     |
+| `bun run lint:fix`            | Lint and auto-fix                       |
+| `bun run format`              | Check formatting (fails if unformatted) |
+| `bun run format:fix`          | Format the repo                         |
+| `bun run boundaries`          | Check package isolation                 |
+| `bun run test`                | Unit tests in every package             |
+| `bun run test:e2e`            | e2e + integration tests (needs Docker)  |
+| `bun x turbo run quality`     | Run lint and format checks together     |
+| `bun x turbo run quality:fix` | Fix lint and formatting issues          |
 
-`turbo run quality` runs lint and format together (`quality:fix` to fix). It is a
-pure aggregator with no matching script, so it works only via `turbo run`.
+Root test scripts delegate to Turbo; quality uses `bun x` because it is a Turbo
+root-task aggregator. Neither form requires a global Turbo installation.
 
 ## Packages
 
@@ -166,11 +179,11 @@ automatically.
 Managed by husky; `prepare: husky` wires them up on every `bun install`, so a
 fresh clone needs no extra step.
 
-| Hook         | Runs                            | Scope                                        |
-| ------------ | ------------------------------- | -------------------------------------------- |
-| `pre-commit` | `lint-staged`                   | staged files only — fixes and re-stages them |
-| `commit-msg` | `commitlint`                    | message format                               |
-| `pre-push`   | `turbo run quality check-types` | whole repo, check only                       |
+| Hook         | Runs                                  | Scope                                        |
+| ------------ | ------------------------------------- | -------------------------------------------- |
+| `pre-commit` | `lint-staged`                         | staged files only — fixes and re-stages them |
+| `commit-msg` | `commitlint`                          | message format                               |
+| `pre-push`   | `bun x turbo run quality check-types` | whole repo, check only                       |
 
 `pre-commit` auto-fixes what it can and stages the result, so the fix lands in the
 same commit. If a lint error is not auto-fixable, it aborts and restores the
@@ -188,20 +201,25 @@ chore(tooling): enable type-aware linting
 
 ## CI
 
-`.github/workflows/ci.yml` and `.gitlab-ci.yml` do the same thing — the commands
-are identical, only the wrapper differs. Use whichever platform applies; the
-other file is inert.
+`.github/workflows/ci.yml` covers quality, type checking, builds, boundaries,
+unit tests, and Docker-backed e2e/integration tests.
 
 ```bash
-turbo run quality check-types build --affected
-turbo boundaries
+bun x turbo run quality check-types --affected
+bun x turbo run build --affected
+bun x turbo boundaries
+bun x turbo run test --affected
+bun x turbo run test:e2e --affected
 ```
 
-`--affected` limits the run to packages touched since the base branch, so it needs
-full git history (`fetch-depth: 0` / `GIT_DEPTH: 0`). The `.turbo` directory is
-cached between runs.
+Type checking finishes before the build starts because both commands generate
+files under `dist` or `.next`. Unit and e2e tests run as separate jobs. On the
+default branch the workflow omits `--affected` and runs the full suite.
 
-`turbo boundaries` fails the build if a package reaches into another package's
+`--affected` limits the run to packages touched since the base branch, so it needs
+full git history (`fetch-depth: 0`). The `.turbo` directory is cached between runs.
+
+`bun x turbo boundaries` fails the build if a package reaches into another package's
 internals instead of going through its `exports`.
 
 `HUSKY: 0` is set in both files — git hooks are pointless in CI, which runs the
@@ -228,7 +246,10 @@ and is safe to delete.
 
 Tasks that write files must declare them in `outputs`, or the files are lost on a
 cache hit. This includes `check-types`, since `incremental: true` makes
-`tsc --noEmit` write `tsconfig.tsbuildinfo`.
+`tsc --noEmit` write `tsconfig.tsbuildinfo`; the frontend task also caches the
+`.next/types` and `next-env.d.ts` files generated by `next typegen`. Frontend
+`.env*` files are explicit task inputs, so environment changes invalidate those
+generated types.
 
 ## License
 

@@ -1,7 +1,9 @@
 import { config } from "dotenv";
 import { defineConfig } from "prisma/config";
 
-config({ path: process.env.NODE_ENV === "test" ? ".env.test" : ".env" });
+import { envFilePath, overrideEnvFile } from "./src/config/index.js";
+
+config({ path: envFilePath, override: overrideEnvFile });
 
 const url = process.env.DATABASE_URL;
 

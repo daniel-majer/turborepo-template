@@ -10,6 +10,7 @@ import {
   appConfig,
   databaseConfig,
   envFilePath,
+  overrideEnvFile,
   redisConfig,
   validateEnv,
 } from "../config/index.js";
@@ -20,6 +21,7 @@ import { DatabaseModule } from "../database/database.module.js";
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath,
+      override: overrideEnvFile,
       validate: validateEnv,
       load: [appConfig, databaseConfig, redisConfig],
     }),

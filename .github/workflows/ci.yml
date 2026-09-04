@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  # TODO(template): Adjust the branches and events to match your workflow.
   push:
     branches: [main]
   pull_request:
@@ -8,7 +9,10 @@ on:
 # Git hooks are pointless here - CI runs the same checks directly.
 env:
   HUSKY: 0
+  # TODO(template): Replace this with the frontend URL used during CI builds.
   NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
   # On a PR only run tasks for packages that changed against the base branch.
   # On main, --affected would compare main against itself and run nothing,
   # so run everything.
@@ -28,7 +32,9 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/setup
 
-      - run: bun x turbo run quality check-types build $TURBO_AFFECTED
+      - run: bun x turbo run quality check-types $TURBO_AFFECTED
+      # Both check-types and build write into dist/.next, so keep them sequential.
+      - run: bun x turbo run build $TURBO_AFFECTED
       - run: bun x turbo boundaries
 
   unit-tests:
