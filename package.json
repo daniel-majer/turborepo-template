@@ -9,6 +9,7 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "check-types": "turbo run check-types",
+    "api:sync": "bun run --cwd apps/be api:spec && bun run --cwd packages/api-client generate",
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e",
     "lint": "oxlint .",

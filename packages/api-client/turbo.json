@@ -1,0 +1,16 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "generate": {
+      // The spec itself is a global dependency (see the root config), so a
+      // contract change already busts this hash.
+      "inputs": ["orval.config.ts", "src/fetcher.ts", "package.json"],
+      "outputs": ["src/generated/**"]
+    },
+    "check-types": {
+      "dependsOn": ["generate"],
+      "outputs": []
+    }
+  }
+}

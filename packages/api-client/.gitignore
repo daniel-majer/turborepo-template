@@ -1,0 +1,3 @@
+# Generated from apps/be/openapi.json by `bun run generate`, the same way the
+# Prisma client is generated: the spec is the reviewable artefact, not its output.
+src/generated

@@ -1,0 +1,33 @@
+{
+  "name": "@repo/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schemas": "./src/generated/schemas.ts",
+    "./fetcher": "./src/fetcher.ts"
+  },
+  "scripts": {
+    "generate": "orval --config ./orval.config.ts",
+    "postinstall": "bun run generate",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@repo/ts-config": "workspace:*",
+    "@tanstack/react-query": "^5.90.5",
+    "@types/node": "^24.0.0",
+    "@types/react": "19.2.18",
+    "be": "workspace:*",
+    "orval": "^8.1.1",
+    "react": "19.2.8",
+    "typescript": "7.0.2"
+  },
+  "peerDependencies": {
+    "@tanstack/react-query": "^5",
+    "react": "^19"
+  }
+}

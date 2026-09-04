@@ -41,6 +41,7 @@ bun run db:migrate   # create/apply a migration in dev (prisma migrate dev)
 bun run db:deploy    # apply migrations in prod/CI (prisma migrate deploy)
 bun run db:migrate:test  # apply migrations to the test database
 bun run db:studio    # browse the database
+bun run api:spec     # rebuild openapi.json from the controllers
 ```
 
 ## Architecture notes
@@ -71,6 +72,9 @@ bun run db:studio    # browse the database
   this.config.port; // number
   ```
 
+- `FRONTEND_URL` is the browser origin CORS lets in. The generated client sends
+  cookies, so it has to be one exact origin - a wildcard is not allowed once
+  credentials are involved - and it has to match the frontend's real address.
 - Adding a variable: declare it in the zod schema (`src/config/env.ts`),
   add it to `.env.example` (`.env` is gitignored), and expose it through an
   existing or new namespace (e.g. `database.config.ts` with
@@ -112,9 +116,20 @@ bun run db:studio    # browse the database
 
 ### Responses
 
+Every response is an envelope, success and failure alike:
+
+```jsonc
+{ "data": { "id": 1 } }                       // success
+{ "data": [ ... ], "meta": { "total": 42 } }  // success with metadata
+{ "data": null, "error": { "statusCode": 404, "message": "User 42 not found",
+                           "timestamp": "...", "path": "/users/42" } }
+```
+
 - **`TransformResponseInterceptor`** (`APP_INTERCEPTOR`) wraps every handler
-  result as `{ data }`. Return `{ data, meta }` yourself to pass pagination or
-  similar through unchanged.
+  result as `{ data }`. To send metadata beside the payload, return
+  `envelope(users, { total })` — a hand-written `{ data: ... }` is deliberately
+  not recognised (it would be indistinguishable from a row with a `data`
+  column) and ends up nested inside a second envelope.
 - **Helmet** (`@fastify/helmet`) sets security headers, registered in
   `src/app.setup.ts` so tests boot with the same middleware as the server.
 
@@ -128,9 +143,32 @@ injection.
   `whitelist` + `forbidNonWhitelisted` reject unknown body fields, `transform`
   converts payloads to DTO instances.
 - **`AllExceptionsFilter`** (`APP_FILTER`, `src/common/all-exceptions.filter.ts`) —
-  unified error responses with `statusCode`, `message`, `timestamp`, `path`.
-  `HttpException`s keep their status and message; unknown errors are logged
-  with stack trace and returned as a generic 500 (no internals leak to clients).
+  turns every failure into `{ data: null, error }`, where `error` carries
+  `statusCode`, `message`, `timestamp`, `path` and, on a validation error,
+  `details` with one entry per failed constraint. `HttpException`s keep their
+  status and message; unknown errors are logged with a stack trace and returned
+  as a generic 500 (no internals leak to clients).
+
+### OpenAPI (`src/swagger.setup.ts`)
+
+- Swagger UI at **`/docs`** and the raw spec at **`/docs-json`**, outside
+  production. `bun run api:spec` writes the same document to `openapi.json`,
+  which `packages/api-client` generates the frontend's client from.
+- The generator runs against `dist/`, and with `preview: true` - controllers and
+  their metadata are registered without instantiating providers, so it needs
+  valid env vars but neither Postgres nor Redis.
+- **`@ApiDataResponse(Dto)`** documents a response the way
+  `TransformResponseInterceptor` really sends it, wrapped in `{ data }`. Use it
+  on every route: without it the spec advertises the bare handler return type,
+  and every generated client is wrong about the shape.
+- Errors need no decorator - `swagger.setup.ts` attaches the error envelope as
+  the `default` response of every operation.
+- `operationIdFactory` names each operation `<controller><Method>`, so
+  `UsersController.findAll` becomes `usersFindAll` and the generated hook
+  `useUsersFindAll`. Without it a second controller with a `findAll` would
+  collide in the generated client.
+- After changing a controller or a DTO, run `bun run api:sync` from the repo
+  root: it regenerates the spec and the client in one step.
 
 ### Testing
 

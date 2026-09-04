@@ -19,5 +19,9 @@
   "sortTailwindcss": true,
   "sortPackageJson": true,
 
-  "ignorePatterns": []
+  "ignorePatterns": [
+    "apps/be/openapi.json",
+    "apps/be/src/database/generated/**",
+    "packages/api-client/src/generated/**"
+  ]
 }

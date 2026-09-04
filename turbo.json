@@ -1,18 +1,26 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
+  // The generated API client is gitignored, and turbo hashes only tracked
+  // files - so a task that consumes it would replay a stale cache after the
+  // contract changed. The committed spec every generated file derives from is
+  // a global dependency instead: change it and nothing is cached.
+  "globalDependencies": ["apps/be/openapi.json"],
   "tasks": {
+    "generate": {
+      "outputs": ["src/generated/**"]
+    },
     "transit": {
       "dependsOn": ["^transit"]
     },
     "build": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "^generate"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"],
-      "env": ["NODE_ENV"]
+      "env": ["NODE_ENV", "API_URL"]
     },
     "check-types": {
-      "dependsOn": ["transit"],
+      "dependsOn": ["transit", "^generate"],
       "outputs": ["tsconfig.tsbuildinfo"]
     },
     "test": {

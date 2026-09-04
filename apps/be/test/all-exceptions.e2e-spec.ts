@@ -23,10 +23,17 @@ describe("AllExceptionsFilter (e2e)", () => {
     const body = res.json();
 
     expect(res.statusCode).toBe(404);
-    expect(body.statusCode).toBe(404);
-    expect(body.message).toBe("User not found");
-    expect(body.path).toBe("/boom/http");
-    expect(body.timestamp).toBeDefined();
+    expect(body.error.statusCode).toBe(404);
+    expect(body.error.message).toBe("User not found");
+    expect(body.error.path).toBe("/boom/http");
+    expect(body.error.timestamp).toBeDefined();
+  });
+
+  it("envelopes the failure so data is never missing", async () => {
+    const res = await t.app.inject({ method: "GET", url: "/boom/http" });
+
+    expect(Object.keys(res.json()).toSorted()).toEqual(["data", "error"]);
+    expect(res.json().data).toBeNull();
   });
 
   it("unknown Error becomes a generic 500 without leaking details", async () => {
@@ -34,8 +41,22 @@ describe("AllExceptionsFilter (e2e)", () => {
     const body = res.json();
 
     expect(res.statusCode).toBe(500);
-    expect(body.message).toBe("Internal Server Error");
+    expect(body.error.message).toBe("Internal Server Error");
+    expect(body.error.details).toBeUndefined();
     expect(res.payload).not.toContain("db exploded");
     expect(res.payload).not.toContain("secret");
+  });
+
+  it("collects validation failures into details", async () => {
+    const res = await t.app.inject({
+      method: "POST",
+      url: "/users",
+      payload: { email: "not-an-email" },
+    });
+    const body = res.json();
+
+    expect(res.statusCode).toBe(400);
+    expect(body.error.message).toBe("Validation failed");
+    expect(body.error.details).toEqual(["email must be an email"]);
   });
 });

@@ -1,5 +1,6 @@
 import { Controller, Get } from "@nestjs/common";
 
+import { envelope } from "../src/common/transform-response.interceptor.js";
 import { useTestApp } from "./setup.js";
 
 @Controller("shapes")
@@ -21,7 +22,14 @@ class ShapesController {
 
   @Get("paginated")
   paginated() {
-    return { data: [1, 2, 3], meta: { pages: 10 } };
+    return envelope([1, 2, 3], { pages: 10 });
+  }
+
+  // A row that happens to carry `data` and `meta` columns is a payload, not
+  // an envelope: it has to end up nested inside one.
+  @Get("lookalike")
+  lookalike() {
+    return { data: "column", meta: "column" };
   }
 }
 
@@ -46,18 +54,26 @@ describe("TransformResponseInterceptor (e2e)", () => {
     expect(res.json()).toEqual({ data: false });
   });
 
-  it("passes { data, meta } responses through unchanged", async () => {
+  it("passes an envelope() response through unchanged", async () => {
     const res = await t.app.inject({ method: "GET", url: "/shapes/paginated" });
 
     expect(res.json()).toEqual({ data: [1, 2, 3], meta: { pages: 10 } });
   });
 
-  it("does not wrap error responses from the exception filter", async () => {
+  it("wraps a value that only looks like an envelope", async () => {
+    const res = await t.app.inject({ method: "GET", url: "/shapes/lookalike" });
+
+    expect(res.json()).toEqual({
+      data: { data: "column", meta: "column" },
+    });
+  });
+
+  it("leaves the exception filter's envelope alone", async () => {
     const res = await t.app.inject({ method: "GET", url: "/does-not-exist" });
     const body = res.json();
 
     expect(res.statusCode).toBe(404);
-    expect(body.data).toBeUndefined();
-    expect(body.statusCode).toBe(404);
+    expect(body.data).toBeNull();
+    expect(body.error.statusCode).toBe(404);
   });
 });

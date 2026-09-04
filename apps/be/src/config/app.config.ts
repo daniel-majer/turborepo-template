@@ -8,5 +8,6 @@ export const appConfig = registerAs("app", () => {
   return {
     nodeEnv: env.NODE_ENV,
     port: env.PORT,
+    frontendUrl: env.FRONTEND_URL,
   };
 });

@@ -10,7 +10,16 @@ export default {
     "scope-enum": [
       2,
       "always",
-      ["fe", "be", "ui", "ts-config", "tooling", "deps", "deps-dev"],
+      [
+        "fe",
+        "be",
+        "api-client",
+        "ui",
+        "ts-config",
+        "tooling",
+        "deps",
+        "deps-dev",
+      ],
     ],
     "scope-case": [2, "always", "lower-case"],
     "subject-empty": [2, "never"],

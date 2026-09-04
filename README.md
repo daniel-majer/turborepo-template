@@ -23,8 +23,9 @@ apps/
   fe/               Next.js app
   be/               NestJS app (Fastify)
 packages/
-  ui/               @repo/ui        — shared React components (shadcn/ui)
-  ts-config/        @repo/ts-config — shared tsconfig presets
+  ui/               @repo/ui         — shared React components (shadcn/ui)
+  api-client/       @repo/api-client — typed API client generated from the backend
+  ts-config/        @repo/ts-config  — shared tsconfig presets
 ```
 
 ## Getting started
@@ -37,6 +38,10 @@ bun run --cwd apps/be docker:up
 bun run --cwd apps/be db:migrate
 bun run dev          # fe → http://localhost:3000, be → http://localhost:3001
 ```
+
+`http://localhost:3000/users` is a working end-to-end example: a page that
+lists, creates and deletes users through a client generated from the backend's
+OpenAPI spec. `http://localhost:3001/docs` is the Swagger UI for the same spec.
 
 Node 22+ (`.nvmrc`, enforced by `engines`) and bun 1.3.14 (`packageManager`).
 
@@ -61,8 +66,13 @@ files that cannot contain comments:
   env, Prisma + Postgres, a Redis cache, pino logging, a global `ValidationPipe`
   and a catch-all exception filter. Postgres and Redis run via Docker; the quick
   start above creates the backend env, starts both services, and applies the
-  Prisma migrations before `bun run dev` — see `apps/be/README.md`. Build on it,
-  or delete the directory if you only need the frontend.
+  Prisma migrations before `bun run dev` — see `apps/be/README.md`.
+- **Frontend only?** The backend is not optional by accident — `apps/fe` imports
+  `@repo/api-client`, which is generated from `apps/be/openapi.json`. To drop it,
+  delete `apps/be` **and** `packages/api-client`, remove `@repo/api-client` from
+  `apps/fe/package.json`, delete `apps/fe/src/app/users/`, drop
+  `NEXT_PUBLIC_API_URL` / `API_URL` from `apps/fe/src/env.ts` and `.env.example`,
+  and remove the `api:sync` script here. Then `bun install`.
 - **`apps/fe/public/` and fonts** — swap the favicon/assets and the Geist fonts in
   `layout.tsx` for your own branding.
 - **CI** (optional) — `ci.yml` runs three parallel jobs (checks, unit tests, e2e
@@ -92,6 +102,7 @@ Everything else — `turbo.json`, git hooks, `commitlint`, the tsconfig presets 
 | `bun run boundaries`          | Check package isolation                 |
 | `bun run test`                | Unit tests in every package             |
 | `bun run test:e2e`            | e2e + integration tests (needs Docker)  |
+| `bun run api:sync`            | Regenerate the API spec and its client  |
 | `bun x turbo run quality`     | Run lint and format checks together     |
 | `bun x turbo run quality:fix` | Fix lint and formatting issues          |
 
@@ -115,7 +126,7 @@ only what is local (paths, includes, source/output directories):
 | -------------------- | ------------------------------------------------------------- |
 | `base.json`          | shared foundation, not used directly                          |
 | `nextjs.json`        | `apps/fe`                                                     |
-| `react-library.json` | `packages/ui`                                                 |
+| `react-library.json` | `packages/ui`, `packages/api-client`                          |
 | `nestjs.json`        | `apps/be` — NodeNext, decorators; app owns `src`/`dist` paths |
 
 ## Adding a shadcn component
@@ -175,6 +186,45 @@ listed there — Next.js sets it from the command it runs.
 Server variables must also be declared in `turbo.json` under `env`, or strict
 mode filters them out and the build fails validation. `NEXT_PUBLIC_*` is inferred
 automatically.
+
+## API contract
+
+The frontend never hand-writes a request or a response type. The backend's
+OpenAPI spec is the contract, and everything below it is generated:
+
+```
+apps/be DTOs + @ApiDataResponse       hand-written
+   └─ bun run --cwd apps/be api:spec  → apps/be/openapi.json   (committed)
+        └─ packages/api-client        → TanStack Query hooks, TS types,
+                                        zod schemas for request bodies
+             └─ apps/fe               imports @repo/api-client
+```
+
+`bun run api:sync` runs both steps. The spec is **committed** on purpose: a
+change to the API shows up as a reviewable diff next to the code that caused
+it, and a fresh clone can generate a client with no backend running.
+`packages/api-client/src/generated/` is not committed — it is rebuilt by the
+package's `postinstall`, the same way the Prisma client is.
+
+Rename a field in a backend DTO, run `api:sync`, and `check-types` fails in
+whichever component still uses the old name. That is the whole point, and two
+pieces of wiring are what make it hold:
+
+- `apps/be/openapi.json` is a **global dependency** in `turbo.json`. The
+  generated client is gitignored, and Turborepo hashes only tracked files, so a
+  task that consumes it would otherwise replay a stale cache after the contract
+  changed.
+- `packages/api-client` declares **`be` as a devDependency**. It imports nothing
+  from it — the edge exists so `turbo --affected` knows a pull request touching
+  only the backend has to type-check and build the frontend too. Without it CI
+  skips `fe` entirely and a breaking contract change merges green.
+
+Two environment variables connect the two sides, and they must agree:
+`FRONTEND_URL` in `apps/be/.env` is the origin CORS lets in, and
+`NEXT_PUBLIC_API_URL` in `apps/fe/.env` is where the browser sends requests.
+Server-side calls can override the second with `API_URL` when the Next process
+reaches the API by a different name than the browser does (a Docker service,
+say).
 
 ## Git hooks
 

@@ -30,7 +30,8 @@
     "**/dist/**",
     "**/.turbo/**",
     "**/next-env.d.ts",
-    "apps/be/src/database/generated/**"
+    "apps/be/src/database/generated/**",
+    "packages/api-client/src/generated/**"
   ],
   "rules": {
     "react/react-in-jsx-scope": "off",

@@ -1,0 +1,11 @@
+{
+  "extends": "@repo/ts-config/react-library.json",
+  "compilerOptions": {
+    // Bundler resolution comes from the preset: orval reads these to decide how
+    // to write its import paths, and under NodeNext it emits `../fetcher.js`
+    // specifiers that turbopack cannot resolve back to the .ts file on disk.
+    "noEmit": true
+  },
+  "include": ["src", "orval.config.ts"],
+  "exclude": ["node_modules"]
+}
