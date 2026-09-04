@@ -7,7 +7,11 @@ export default {
   extends: ["@commitlint/config-conventional"],
   rules: {
     "scope-empty": [2, "never"],
-    "scope-enum": [2, "always", ["fe", "be", "tooling", "deps", "deps-dev"]],
+    "scope-enum": [
+      2,
+      "always",
+      ["fe", "be", "ui", "ts-config", "tooling", "deps", "deps-dev"],
+    ],
     "scope-case": [2, "always", "lower-case"],
     "subject-empty": [2, "never"],
     "type-empty": [2, "never"],

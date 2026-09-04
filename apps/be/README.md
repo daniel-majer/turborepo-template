@@ -30,7 +30,8 @@ bun run check-types  # tsc --noEmit
 bun run test         # unit tests (vitest)
 bun run test:e2e     # e2e + integration tests: starts the test docker stack,
                      # migrates, runs, tears the stack down
-bun run test:e2e:watch  # same tests in watch mode (start the stack yourself)
+bun run test:e2e:watch  # same tests in watch mode; start the stack and
+                     # migrate it yourself first (see below)
 bun run test:cov     # unit tests with coverage
 bun run docker:up    # start dev postgres + redis
 bun run docker:down  # stop them
@@ -52,10 +53,12 @@ bun run db:studio    # browse the database
 ### Environment variables & config (`src/config/`)
 
 - Managed by `@nestjs/config` + validated with a **zod** schema in `src/config/env.ts`.
-- `.env` is loaded normally; with `NODE_ENV=test` (set automatically by vitest)
-  the app and `prisma.config.ts` load `.env.test` with override semantics
-  (`src/config/env-file.ts`), so ambient `DATABASE_URL` / `REDIS_URL` values
-  cannot redirect cleanup.
+- `.env` is loaded normally; with `NODE_ENV=test` the app and `prisma.config.ts`
+  load `.env.test` with override semantics (`src/config/env-file.ts`), so ambient
+  `DATABASE_URL` / `REDIS_URL` values cannot redirect cleanup. Vitest only
+  defaults `NODE_ENV` to `test` when it is unset, so the test scripts set it
+  explicitly - otherwise an exported `NODE_ENV=development` would point the
+  suite at your dev database.
 - The app fails fast on startup if a variable is missing or invalid.
 - Raw env vars are grouped into typed **namespaces** via `registerAs`
   (`src/config/app.config.ts`) and injected where needed — never use `process.env`:
@@ -112,7 +115,8 @@ bun run db:studio    # browse the database
 - **`TransformResponseInterceptor`** (`APP_INTERCEPTOR`) wraps every handler
   result as `{ data }`. Return `{ data, meta }` yourself to pass pagination or
   similar through unchanged.
-- **Helmet** (`@fastify/helmet`) sets security headers in `main.ts`.
+- **Helmet** (`@fastify/helmet`) sets security headers, registered in
+  `src/app.setup.ts` so tests boot with the same middleware as the server.
 
 ### Global providers (`core.module.ts`)
 
@@ -147,11 +151,19 @@ injection.
   after every test truncates all tables and clears the cache. Pass extra
   `controllers`/`providers` for the test as module metadata. Files run
   sequentially (`fileParallelism: false`) because they share one database.
-- Before cleanup, the helper requires `NODE_ENV=test`, exact Postgres and Redis
-  URLs from `.env.test`, local hostnames, and a Postgres database ending in
-  `_test`.
+- Before the app boots and again before every cleanup, the helper requires
+  `NODE_ENV=test`, exact Postgres and Redis URLs from `.env.test`, local
+  hostnames, and a Postgres database ending in `_test` (`test/safety.ts`).
 - `bun run test:e2e` starts `docker-compose.test.yml`, applies migrations and
   removes the stack afterwards, so it needs Docker but no manual setup.
+- `bun run test:e2e:watch` skips all of that, so do it once yourself:
+
+  ```bash
+  bun run docker:test:up
+  bun run db:migrate:test   # required on every stack start - the test
+                            # database is tmpfs and comes up empty
+  bun run test:e2e:watch
+  ```
 
 ### CI / CD
 

@@ -21,8 +21,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
-    "test:e2e": "bun run docker:test:up && bun run db:migrate:test && vitest run --config ./vitest.config.e2e.ts; status=$?; bun run docker:test:down; exit $status",
-    "test:e2e:watch": "vitest --config ./vitest.config.e2e.ts"
+    "test:e2e": "bun run docker:test:up && bun run db:migrate:test && NODE_ENV=test vitest run --config ./vitest.config.e2e.ts; status=$?; bun run docker:test:down; exit $status",
+    "test:e2e:watch": "NODE_ENV=test vitest --config ./vitest.config.e2e.ts"
   },
   "dependencies": {
     "@fastify/helmet": "^13.1.1",
@@ -60,7 +60,6 @@
     "prisma": "^7.10.0",
     "source-map-support": "^0.5.21",
     "typescript": "^6",
-    "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^4.1.2"
   }
 }

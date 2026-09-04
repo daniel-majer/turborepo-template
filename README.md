@@ -158,9 +158,11 @@ with the `next` package.
 
 ## Environment variables
 
-Validated with [t3-env](https://env.t3.gg) + zod. Each app owns its schema
-(`apps/fe/src/env.ts`) and its own `.env` — there is no root `.env`, so it stays
-clear which app needs what.
+Each app owns its schema and its own `.env` — there is no root `.env`, so it
+stays clear which app needs what. The frontend uses
+[t3-env](https://env.t3.gg) + zod (`apps/fe/src/env.ts`); the backend uses a
+plain zod schema read through `@nestjs/config` (`apps/be/src/config/env.ts`, see
+`apps/be/README.md`). The rest of this section is about the frontend.
 
 `next.config.ts` imports the schema, so a missing or malformed variable **fails
 the build** instead of surfacing as `undefined` at runtime. Import `env` rather
@@ -222,8 +224,8 @@ full git history (`fetch-depth: 0`). The `.turbo` directory is cached between ru
 `bun x turbo boundaries` fails the build if a package reaches into another package's
 internals instead of going through its `exports`.
 
-`HUSKY: 0` is set in both files — git hooks are pointless in CI, which runs the
-same checks directly.
+`HUSKY: 0` is set in the workflow — git hooks are pointless in CI, which runs
+the same checks directly.
 
 ### Hooks failing in a git GUI
 

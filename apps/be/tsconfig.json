@@ -2,6 +2,8 @@
   "extends": "@repo/ts-config/nestjs.json",
   "compilerOptions": {
     "outDir": "./dist",
+    // Outside outDir: `nest build` wipes dist/, which would delete it.
+    "tsBuildInfoFile": "./tsconfig.tsbuildinfo",
     "isolatedModules": true,
     "strictPropertyInitialization": false,
     "types": ["vitest/globals", "node"]

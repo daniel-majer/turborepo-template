@@ -4,9 +4,6 @@
   "tasks": {
     "build": {
       "outputs": ["dist/**", "tsconfig.build.tsbuildinfo"]
-    },
-    "check-types": {
-      "outputs": ["dist/tsconfig.tsbuildinfo"]
     }
   }
 }

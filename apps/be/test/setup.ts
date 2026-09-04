@@ -30,6 +30,10 @@ export function useTestApp(metadata: ModuleMetadata = {}): TestApp {
   const state: Partial<TestApp> = {};
 
   beforeAll(async () => {
+    // Checked before anything connects, so a stray NODE_ENV or DATABASE_URL
+    // cannot point the suite at the dev services in the first place.
+    assertSafeTestTargets();
+
     const moduleRef = await Test.createTestingModule({
       ...metadata,
       imports: [AppModule, ...(metadata.imports ?? [])],

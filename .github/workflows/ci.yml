@@ -33,7 +33,8 @@ jobs:
       - uses: ./.github/actions/setup
 
       - run: bun x turbo run quality check-types $TURBO_AFFECTED
-      # Both check-types and build write into dist/.next, so keep them sequential.
+      # `next typegen` and `next build` both write into .next, so keep the two
+      # turbo invocations sequential.
       - run: bun x turbo run build $TURBO_AFFECTED
       - run: bun x turbo boundaries
 

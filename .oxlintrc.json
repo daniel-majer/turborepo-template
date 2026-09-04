@@ -34,6 +34,7 @@
   ],
   "rules": {
     "react/react-in-jsx-scope": "off",
-    "import/no-unassigned-import": "off"
+    "import/no-unassigned-import": "off",
+    "typescript/no-extraneous-class": ["error", { "allowWithDecorator": true }]
   }
 }

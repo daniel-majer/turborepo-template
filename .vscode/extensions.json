@@ -1,0 +1,7 @@
+{
+  "recommendations": ["oxc.oxc-vscode", "TypeScriptTeam.native-preview"],
+  "unwantedRecommendations": [
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint"
+  ]
+}
