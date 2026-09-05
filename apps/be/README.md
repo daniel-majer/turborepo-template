@@ -9,10 +9,13 @@ Requires Docker (Postgres and Redis run in containers, see `docker-compose.yml`)
 ```bash
 bun install          # also runs `prisma generate`
 cp .env.example .env
-bun run docker:up    # start postgres + redis and wait until healthy
-bun run db:migrate   # apply migrations
-bun run dev
+bun run dev          # starts postgres + redis, applies migrations, watch mode
+bun run db:seed      # optional: two sample users
 ```
+
+`dev` chains `docker:up`, `db:deploy` and `nest start --watch`, so a fresh clone
+reaches a working schema without a separate step. `db:migrate` is for creating
+a migration after editing `schema.prisma`.
 
 `.env.test` is committed and used by the test scripts; it points at a separate
 Docker stack (`docker-compose.test.yml`, ports 5434 / 6380) so tests never touch
@@ -23,7 +26,7 @@ checkout on the same Docker host must use a different pair of names.
 ## Scripts
 
 ```bash
-bun run dev          # docker:up + start in watch mode
+bun run dev          # docker:up + db:deploy + start in watch mode
 bun run build        # compile to dist/
 bun run start        # run compiled app
 bun run check-types  # tsc --noEmit
@@ -37,9 +40,11 @@ bun run docker:up    # start dev postgres + redis
 bun run docker:down  # stop them
 bun run docker:test:up    # start the throwaway test stack
 bun run docker:test:down  # remove it
+bun run db:generate  # regenerate the prisma client (postinstall does it too)
 bun run db:migrate   # create/apply a migration in dev (prisma migrate dev)
 bun run db:deploy    # apply migrations in prod/CI (prisma migrate deploy)
 bun run db:migrate:test  # apply migrations to the test database
+bun run db:seed      # insert the sample rows (src/database/seed.ts)
 bun run db:studio    # browse the database
 bun run api:spec     # rebuild openapi.json from the controllers
 ```
@@ -72,9 +77,18 @@ bun run api:spec     # rebuild openapi.json from the controllers
   this.config.port; // number
   ```
 
-- `FRONTEND_URL` is the browser origin CORS lets in. The generated client sends
-  cookies, so it has to be one exact origin - a wildcard is not allowed once
-  credentials are involved - and it has to match the frontend's real address.
+- `DATABASE_URL` and `REDIS_URL` must carry a scheme and a host: plain
+  `z.url()` accepts `localhost:5432` (protocol "localhost") and `postgres:/app`
+  (no host), and both would only fail deep inside a driver.
+- `CORS_ORIGINS` lists the browser origins allowed to call this api, comma
+  separated; empty allows none and is logged at boot. The generated client
+  sends cookies, so the origins are exact - browsers refuse a wildcard together
+  with credentials - and `methods` is spelled out in `app.setup.ts` because
+  `@fastify/cors` otherwise allows only `GET`, `HEAD` and `POST`.
+- `CACHE_NAMESPACE` prefixes every cache key and bounds what `clear()` wipes.
+  No default: two projects on one Redis must not share it.
+- `LOG_LEVEL` overrides the per-environment default (`debug` in development,
+  `info` in production, `silent` in tests) without a redeploy.
 - Adding a variable: declare it in the zod schema (`src/config/env.ts`),
   add it to `.env.example` (`.env` is gitignored), and expose it through an
   existing or new namespace (e.g. `database.config.ts` with
@@ -86,9 +100,21 @@ bun run api:spec     # rebuild openapi.json from the controllers
 - Schema lives in `src/database/schema.prisma`, migrations in
   `src/database/migrations/`, config in `prisma.config.ts`. The generated client
   (`src/database/generated/`) is gitignored and rebuilt on `bun install`.
-- `DatabaseService` extends `PrismaClient`, connects on module init and is
+  Turbo's `db:generate` dependency also generates/restores it before backend
+  build, type checks, tests and dev startup, using schema/config-based inputs.
+- `DatabaseService` extends `PrismaClient`, verifies a real `SELECT 1` on module
+  init (the pg pool connects lazily, with a 5 s connection timeout) and is
   global — inject it and use `this.db.user.findMany()`.
-- Changing the schema: edit `schema.prisma`, then `bun run db:migrate`.
+- Changing the schema: edit `schema.prisma`, then `bun run db:migrate` and
+  `bun run db:generate`. Prisma 7 does not generate the client during migration.
+- `prisma.config.ts` deliberately imports nothing from `src/`: it also runs
+  inside the production image, where only `dist/`, the schema and the
+  migrations exist (the `migrate` service in `docker-compose.prod.yml`). It
+  mirrors `src/config/env-file.ts` - keep the two in sync. `prisma` and `dotenv`
+  are runtime dependencies for the same reason.
+- `src/database/seed.ts` is registered as the seed command. Run `bun run db:seed`
+  explicitly; Prisma 7 does not seed automatically during migrations or resets.
+  Upserts make repeated runs safe.
 - `docker-compose.yml` reads `POSTGRES_*` and `REDIS_PORT` from `.env`; the app
   itself only reads `DATABASE_URL` and `REDIS_URL`, so keep the ports in sync.
 - `docker-compose.test.yml` intentionally contains fixed disposable credentials
@@ -97,21 +123,43 @@ bun run api:spec     # rebuild openapi.json from the controllers
 ### Cache (`src/cache/`)
 
 - **Redis 7** in Docker, `@nestjs/cache-manager` on top of `cache-manager` v7
-  and `@keyv/redis`. Default TTL is 5 s (ms everywhere).
+  and `@keyv/redis`. Default TTL is 5 s; every duration is in **milliseconds**,
+  and a ttl of `0` is rejected because keyv would store the value forever.
 - Use the global `CacheService` (`get`, `set`, `del`, `clear`, `wrap`) rather than
   `CACHE_MANAGER` directly, so the store can be swapped in one place.
-  `wrap(key, fn, ttl)` is the cache-aside helper: returns the cached value or
-  runs `fn`, stores and returns its result.
+  `wrap(key, fn, ttl)` is the cache-aside helper: returns the cached value, or
+  runs `fn` **once for all concurrent callers** of that key, stores and returns
+  its result. A `del()`, `set()` or `clear()` while `fn` runs cancels the write,
+  so a stale value is not put back.
+- Values are stored as-is, so `get()`, `set()`, `wrap()` and `CacheInterceptor`
+  share one keyspace. The one thing that cannot be cached is `undefined` -
+  Redis reads it back as a miss - so `wrap()` does not store it. Return `null`
+  when "there is nothing there" is worth caching.
+- **Redis down degrades, it does not fail.** The client connects with a 500 ms
+  timeout and no offline queue - a command against an unreachable Redis fails
+  at once instead of waiting for a reconnect that may never come. `wrap()` then
+  falls back to a plain `fn()` call (a read error is a miss, a failed write is
+  logged), `/health/ready` reports `degraded`, and the api keeps serving.
+  `set`, `del` and `clear` do propagate the error, so an invalidation that
+  could not reach Redis is not mistaken for a successful one.
 - Nest's `CacheInterceptor` is **not** registered globally on purpose — it keys
   by URL only, which leaks responses between users on authenticated routes.
-  Apply it per controller with `@UseInterceptors(CacheInterceptor)` on public
-  GET endpoints.
+  Apply it per handler with `@UseInterceptors(CacheInterceptor)` on public
+  GET endpoints. It replays the handler's value through JSON on a hit, which
+  is why `envelope()` marks its result with a plain key rather than a Symbol.
 
 ### Logging
 
 - `nestjs-pino` — structured JSON logs, `pino-pretty` in development, silent in
-  tests. Every request is logged with `authorization`, `cookie` and `set-cookie`
-  headers redacted.
+  tests; `LOG_LEVEL` overrides the default. Outside development, records go
+  through a `multistream`: `error` and above to stderr, the rest to stdout.
+- Every request is logged at a level that follows its outcome - `info` for a
+  2xx/3xx, `warn` for a 4xx, `error` for a 5xx or a thrown error - with the
+  `authorization`, `cookie` and `set-cookie` headers redacted, the query string
+  stripped from the url (it can carry tokens), and the response headers reduced
+  to `content-length` (helmet adds ~400 identical bytes otherwise).
+- Requests to `/health/*` are not logged: healthchecks poll every few seconds
+  and say nothing useful.
 - Inject a scoped logger with `@InjectPinoLogger(MyService.name) logger: PinoLogger`.
 
 ### Responses
@@ -130,8 +178,29 @@ Every response is an envelope, success and failure alike:
   `envelope(users, { total })` — a hand-written `{ data: ... }` is deliberately
   not recognised (it would be indistinguishable from a row with a `data`
   column) and ends up nested inside a second envelope.
+- A handler that returns `null` or nothing answers `{ data: null }`; document
+  it with `@ApiDataResponse(Dto, { nullable: true })` so the generated type is
+  nullable too.
+- **`@RawResponse()`** opts a handler out of the envelope, for return values
+  that are not a payload: a `StreamableFile`, an `@Sse()` observable, a dynamic
+  `@Redirect()`. Such a route describes itself with `@ApiResponse` and a
+  content type instead.
 - **Helmet** (`@fastify/helmet`) sets security headers, registered in
   `src/app.setup.ts` so tests boot with the same middleware as the server.
+
+### Health (`src/health/`)
+
+- **`GET /health/live`** - is the process alive? Wire restart policies to this
+  one; restarting a container because its database went down turns one outage
+  into a crash loop.
+- **`GET /health/ready`** - can it serve traffic? Checks Postgres with
+  `SELECT 1` and Redis with a write, each under a 2 s timeout. Wire load
+  balancers, container healthchecks and `docker compose up --wait` to this one.
+  An unreachable database answers `503`; an unreachable Redis leaves it `200`
+  with `status: "degraded"`, because serving slower beats not serving at all.
+- `main.ts` calls `enableShutdownHooks()`, so `SIGTERM` (what `docker stop`
+  sends) runs `onModuleDestroy` and Prisma closes its pool instead of being
+  killed mid-query.
 
 ### Global providers (`core.module.ts`)
 
@@ -151,6 +220,14 @@ injection.
 
 ### OpenAPI (`src/swagger.setup.ts`)
 
+- `nest-cli.json` enables Swagger's `classValidatorShim` for `.dto.ts` and
+  `.entity.ts` files, deriving supported constraints from validation decorators.
+  `@ApiProperty` remains useful for descriptions/examples and schema features
+  the plugin cannot infer. `@Transform` behavior is not described by OpenAPI.
+  Controller inference is disabled: response envelopes must still be explicit.
+  `test/swagger-plugin.ts` applies the same DTO transformer under Vitest; it
+  needs the TypeScript 6 compiler API, also declared at the workspace root so
+  Bun's fallback resolution does not select the frontend's TypeScript 7.
 - Swagger UI at **`/docs`** and the raw spec at **`/docs-json`**, outside
   production. `bun run api:spec` writes the same document to `openapi.json`,
   which `packages/api-client` generates the frontend's client from.
@@ -158,9 +235,17 @@ injection.
   their metadata are registered without instantiating providers, so it needs
   valid env vars but neither Postgres nor Redis.
 - **`@ApiDataResponse(Dto)`** documents a response the way
-  `TransformResponseInterceptor` really sends it, wrapped in `{ data }`. Use it
-  on every route: without it the spec advertises the bare handler return type,
-  and every generated client is wrong about the shape.
+  `TransformResponseInterceptor` really sends it, wrapped in `{ data }`. The
+  status comes from the verb (`@Post` is 201, the rest 200) or from `@HttpCode`;
+  pass `{ isArray: true }` for a list, `{ nullable: true }` for a handler that
+  may return nothing, `{ meta: true }` for a route that answers with
+  `envelope(data, meta)`.
+- **A route without it fails `api:spec`** - and the app's boot outside
+  production, since Swagger UI builds the same document. A route that describes
+  no payload would land in the spec as a status with no content, and orval would
+  generate an untyped hook from it. Only `204`/`205` responses are exempt. This
+  applies to test-only controllers too: a probe controller in an e2e suite
+  needs the decorator like any other route.
 - Errors need no decorator - `swagger.setup.ts` attaches the error envelope as
   the `default` response of every operation.
 - `operationIdFactory` names each operation `<controller><Method>`, so
@@ -205,10 +290,16 @@ injection.
 
 ### CI / CD
 
-- The GitHub workflow runs unit tests (`bun x turbo run test`) and e2e
-  tests (`bun x turbo run test:e2e`, using the same Docker test stack as locally)
-  as separate jobs, only for affected packages on pull requests.
-- There is no deploy workflow (it depends on where you host). Whatever you use,
-  run `bun run db:deploy` with the production `DATABASE_URL` before starting the
-  new version, and build from the repo root because `be` depends on workspace
-  packages.
+- `ci.yml` runs the checks, unit tests and e2e tests (the same Docker test stack
+  as locally) as separate jobs on pull requests, and as the gate of every
+  release. It also regenerates `openapi.json` and fails if the committed file
+  is behind the controllers.
+- A separate production smoke job builds both images, migrates an isolated
+  production Compose stack and runs API CRUD, SSR and dependency-outage probes.
+- `release.yml` builds `apps/be/Dockerfile` from the repository root (the app
+  depends on workspace packages), pushes it to ghcr.io and pokes a deploy hook.
+  The image runs `node dist/main.js` as a non-root user and carries the schema
+  and migrations, so the same image runs `prisma migrate deploy` as the
+  one-shot `migrate` service in `docker-compose.prod.yml` before the api starts.
+  See "Deployment" in the root README, and `bun run verify:images` to build and
+  probe the image locally.

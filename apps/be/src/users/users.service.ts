@@ -56,12 +56,7 @@ export class UsersService {
     }
   }
 
-  /**
-   * Maps the Prisma error codes this service can provoke onto HTTP responses.
-   * Returns undefined for anything else, so the caller rethrows the original -
-   * an unrecognised failure is a bug and belongs in the log as a 500, not
-   * dressed up as a 409.
-   */
+  /** Map known Prisma errors to HTTP responses; leave unexpected errors as 500s. */
   private toHttpException(
     error: unknown,
     email?: string,
@@ -82,11 +77,7 @@ export class UsersService {
   }
 }
 
-/**
- * P2002 names the offending column(s) in `meta.target`. Reading them keeps the
- * message truthful when the write had no email to talk about - a delete, or a
- * patch of some other field - and when a second unique column is added later.
- */
+/** Read conflicting columns from Prisma metadata instead of assuming email. */
 function conflictMessage(
   error: Prisma.PrismaClientKnownRequestError,
   email?: string,

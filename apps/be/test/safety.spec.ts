@@ -3,6 +3,7 @@ import { assertSafeTestTargets } from "./safety.js";
 const testFileEnvironment = {
   DATABASE_URL: "postgresql://postgres:postgres@localhost:5434/app_test",
   REDIS_URL: "redis://localhost:6380",
+  CACHE_NAMESPACE: "app-test",
 };
 
 const runtimeEnvironment = {
@@ -43,6 +44,7 @@ describe("test cleanup target safety", () => {
       DATABASE_URL:
         "postgresql://postgres:postgres@db.example.com:5434/app_test",
       REDIS_URL: "redis://cache.example.com:6380",
+      CACHE_NAMESPACE: "app-test",
     };
 
     expect(() =>
@@ -57,6 +59,7 @@ describe("test cleanup target safety", () => {
     const unsafeEnvironment = {
       DATABASE_URL: "postgresql://postgres:postgres@localhost:5434/app",
       REDIS_URL: "redis://localhost:6380",
+      CACHE_NAMESPACE: "app-test",
     };
 
     expect(() =>
@@ -65,5 +68,28 @@ describe("test cleanup target safety", () => {
         unsafeEnvironment,
       ),
     ).toThrow(/must end with/);
+  });
+
+  it("rejects a cache namespace that differs from .env.test", () => {
+    expect(() =>
+      assertSafeTestTargets(
+        { ...runtimeEnvironment, CACHE_NAMESPACE: "app" },
+        testFileEnvironment,
+      ),
+    ).toThrow(/CACHE_NAMESPACE does not match/);
+  });
+
+  it('requires a cache namespace ending with "-test"', () => {
+    const unsafeEnvironment = {
+      ...testFileEnvironment,
+      CACHE_NAMESPACE: "app",
+    };
+
+    expect(() =>
+      assertSafeTestTargets(
+        { ...unsafeEnvironment, NODE_ENV: "test" },
+        unsafeEnvironment,
+      ),
+    ).toThrow(/must end with "-test"/);
   });
 });

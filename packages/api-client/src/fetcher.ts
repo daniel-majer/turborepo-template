@@ -1,50 +1,39 @@
-/**
- * The single place every generated call goes through (orval's `mutator`). It
- * owns the base url, credentials and error handling, so no generated file has
- * to - and none of that has to be repeated at a call site either.
- *
- * TODO(template): authentication. When the api gets it, the header belongs here.
- */
+/** Shared transport for generated calls. TODO(template): add auth headers here. */
 
-/** Nothing answered at all: dns, connection refused, CORS, an aborted request. */
+/** No HTTP response: network failure, CORS or cancellation. */
 export const NETWORK_ERROR_STATUS = 0;
 
-/** The `error` half of the envelope, as the backend's AllExceptionsFilter sends it. */
+/** Backend error envelope body. */
 export interface ApiErrorBody {
   statusCode: number;
   message: string;
-  /** One entry per failed constraint, on a validation error. */
+  /** Validation failures. */
   details?: string[];
   timestamp: string;
   path: string;
 }
 
-/**
- * Thrown for every request that does not come back 2xx, including the ones
- * that never reached the server. react-query surfaces it as `error` and a
- * server component gets it as a rejected promise - either way the caller sees
- * the backend's own message rather than "Unexpected token < in JSON", and
- * never a bare TypeError whose shape nothing declared.
- *
- * The `data` and `error` fields mirror the error envelope on purpose: the
- * generated hooks type their TError from the spec, so what is thrown has to be
- * assignable to it. Extending Error on top of that keeps a stack trace and
- * `instanceof` working.
- */
+/** HTTP and network error, compatible with generated error-envelope types. */
 export class ApiError extends Error {
   readonly data = null;
   readonly error: ApiErrorBody;
+  /** Retry-After delay in milliseconds. */
+  readonly retryAfterMs: number | undefined;
 
   constructor(
     readonly status: number,
     body: ApiErrorBody,
-    options?: { cause?: unknown },
+    options?: { cause?: unknown; retryAfterMs?: number },
   ) {
-    super(body.message, options);
+    super(body.message, { cause: options?.cause });
     this.name = "ApiError";
     this.error = body;
+    this.retryAfterMs = options?.retryAfterMs;
   }
 }
+
+// Distinguish invalid JSON from an absent body.
+const NOT_JSON = Symbol("not json");
 
 export async function fetcher<T>(
   url: string,
@@ -52,46 +41,73 @@ export async function fetcher<T>(
 ): Promise<T> {
   const response = await request(url, options);
 
-  // 204 and friends have no body to parse, and response.json() would throw on
-  // the empty string. null rather than undefined: react-query v5 rejects an
-  // undefined query result.
+  // Use null for empty bodies; React Query rejects undefined results.
   const payload: unknown =
     response.status === 204 || response.headers.get("content-length") === "0"
       ? null
-      : await response.json().catch(() => null);
+      : await response.json().catch(() => NOT_JSON);
 
   if (!response.ok) {
     throw new ApiError(
       response.status,
       errorBodyOf(payload, response.status, url),
+      { retryAfterMs: retryAfterOf(response) },
     );
   }
 
-  // The generated caller declares T from the spec; nothing at run time can
-  // check a json body against it, and pretending otherwise is what the zod
-  // schemas are for.
+  // Reject unexpected 2xx responses, such as a proxy login page.
+  if (payload !== null && !isEnvelope(payload)) {
+    throw new ApiError(
+      response.status,
+      fallbackBody(
+        response.status,
+        `The api answered ${response.status} with something other than a ` +
+          "response envelope - is the base url pointing at the api?",
+        url,
+      ),
+    );
+  }
+
+  // T comes from the spec; response payloads are not runtime-validated.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return payload as T;
 }
 
+function isEnvelope(payload: unknown): payload is { data: unknown } {
+  return typeof payload === "object" && payload !== null && "data" in payload;
+}
+
+// Retry-After is seconds or an http date; unparseable counts as absent.
+function retryAfterOf(response: Response): number | undefined {
+  const header = response.headers.get("retry-after");
+
+  if (header === null) {
+    return undefined;
+  }
+
+  const seconds = Number(header);
+
+  if (Number.isFinite(seconds)) {
+    return Math.max(0, seconds * 1_000);
+  }
+
+  const at = Date.parse(header);
+
+  return Number.isNaN(at) ? undefined : Math.max(0, at - Date.now());
+}
+
 async function request(url: string, options: RequestInit): Promise<Response> {
-  // Outside the try on purpose: resolveUrl throws its own, actionable error,
-  // and catching it below would replace "set API_URL" with a generic
-  // "could not reach the api".
+  // Keep configuration errors separate from network errors.
   const target = resolveUrl(url);
 
   try {
     return await fetch(target, {
-      // Cookies are how a session travels; without this a same-site login is
-      // invisible to the api.
+      // Include cookies for API sessions.
       credentials: "include",
       ...options,
     });
   } catch (cause) {
-    // fetch rejects with a bare TypeError when the request never completed.
-    // Left alone that reaches the ui as an error of a shape nothing declared,
-    // and a component reading the envelope's fields throws while rendering the
-    // very message it meant to show.
+    // Normalize network failures to the same error shape as HTTP failures.
     throw new ApiError(
       NETWORK_ERROR_STATUS,
       fallbackBody(NETWORK_ERROR_STATUS, "Could not reach the api", url),
@@ -101,18 +117,15 @@ async function request(url: string, options: RequestInit): Promise<Response> {
 }
 
 /**
- * A browser request may be relative - one proxy serves the page and the api
- * under one origin - but on the server there is no origin to be relative to,
- * and fetch refuses to parse the url. Hence two variables: NEXT_PUBLIC_API_URL
- * is compiled into the browser bundle and holds the public address, API_URL is
- * read at run time and says how this process reaches the api from inside the
- * network, which in docker is a service name rather than a public host.
+ * Use runtime API_URL on the server, build-time NEXT_PUBLIC_API_URL in the browser.
+ * Server requests require an absolute base URL.
  */
 function resolveUrl(url: string): string {
   const isServer = typeof window === "undefined";
+  // `||`, not `??`: an unset compose variable or docker ARG arrives as "".
   const base =
-    (isServer ? process.env.API_URL : undefined) ??
-    process.env.NEXT_PUBLIC_API_URL ??
+    (isServer ? process.env.API_URL : undefined) ||
+    process.env.NEXT_PUBLIC_API_URL ||
     "";
 
   if (isServer && base === "") {
@@ -122,14 +135,19 @@ function resolveUrl(url: string): string {
         NETWORK_ERROR_STATUS,
         `Cannot request "${url}" from the server without an absolute base url. ` +
           "Set API_URL to where the api answers from inside the network (in " +
-          "docker compose that is the service name, http://be:3001), or make " +
+          "docker compose that is the service name, http://api:3001), or make " +
           "this call from a client component.",
         url,
       ),
     );
   }
 
-  return `${base}${url}`;
+  return join(base, url);
+}
+
+// Preserve base paths and avoid double slashes.
+function join(base: string, path: string): string {
+  return `${base.replace(/\/+$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 function errorBodyOf(
@@ -137,16 +155,13 @@ function errorBodyOf(
   status: number,
   url: string,
 ): ApiErrorBody {
-  // The envelope is what the api promises, but a proxy, a gateway or a crash
-  // before the filter can put anything at all on the wire, and a client that
-  // throws while building an error is the worst possible time to lose the
-  // status code.
+  // Proxy errors may lack an envelope; preserve their HTTP status.
   return isErrorEnvelope(payload)
     ? payload.error
     : fallbackBody(status, `Request failed with status ${status}`, url);
 }
 
-/** A stand-in envelope for a failure the backend never got to describe. */
+/** Fallback for errors without a backend envelope. */
 function fallbackBody(
   statusCode: number,
   message: string,

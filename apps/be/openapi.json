@@ -41,6 +41,86 @@
         ]
       }
     },
+    "/health/live": {
+      "get": {
+        "operationId": "healthLive",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/LivenessDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any failure. `data` is null and `error` says what went wrong.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Is the process alive? Wire restart policies here",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "healthReady",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReadinessDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any failure. `data` is null and `error` says what went wrong.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Can it serve traffic? Wire healthchecks here",
+        "tags": [
+          "health"
+        ]
+      }
+    },
     "/users": {
       "post": {
         "operationId": "usersCreate",
@@ -284,6 +364,67 @@
   "servers": [],
   "components": {
     "schemas": {
+      "LivenessDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ],
+            "example": "ok"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "HealthChecksDto": {
+        "type": "object",
+        "properties": {
+          "database": {
+            "enum": [
+              "up",
+              "down"
+            ],
+            "type": "string",
+            "example": "up"
+          },
+          "cache": {
+            "enum": [
+              "up",
+              "down"
+            ],
+            "type": "string",
+            "example": "up"
+          }
+        },
+        "required": [
+          "database",
+          "cache"
+        ]
+      },
+      "ReadinessDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "enum": [
+              "ok",
+              "degraded"
+            ],
+            "type": "string",
+            "description": "\"degraded\" means the cache is unreachable; the api still serves requests",
+            "example": "ok"
+          },
+          "checks": {
+            "$ref": "#/components/schemas/HealthChecksDto"
+          }
+        },
+        "required": [
+          "status",
+          "checks"
+        ]
+      },
       "UserDto": {
         "type": "object",
         "properties": {
@@ -317,8 +458,8 @@
         "properties": {
           "email": {
             "type": "string",
-            "format": "email",
             "maxLength": 255,
+            "format": "email",
             "description": "Trimmed and lowercased before it is stored.",
             "example": "ada@example.com"
           }
@@ -332,8 +473,8 @@
         "properties": {
           "email": {
             "type": "string",
-            "format": "email",
             "maxLength": 255,
+            "format": "email",
             "description": "Trimmed and lowercased before it is stored.",
             "example": "ada@example.com"
           }

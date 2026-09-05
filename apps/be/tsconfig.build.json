@@ -2,6 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "rootDir": "./src",
+    "tsBuildInfoFile": "./tsconfig.build.tsbuildinfo",
     "types": ["node"]
   },
   "include": ["src"],

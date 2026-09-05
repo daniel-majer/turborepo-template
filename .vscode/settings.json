@@ -1,18 +1,15 @@
 {
-  // This repo formats with oxfmt, not Prettier. Set at workspace level so other
-  // projects on this machine keep using their own formatter.
+  // Use Oxc formatting only in this workspace.
   "editor.defaultFormatter": "oxc.oxc-vscode",
   "editor.formatOnSave": true,
 
-  // Run oxlint --fix on save; ESLint is not used here, so disable its action.
+  // Use Oxc fixes on save, not ESLint.
   "editor.codeActionsOnSave": {
     "source.fixAll.oxc": "explicit",
     "source.fixAll.eslint": "never"
   },
 
-  // NOTE: typescript.tsdk is intentionally absent. This repo runs TypeScript 7,
-  // the native (Go) port, which ships no tsserver.js — tsdk cannot point at it.
-  // Editor support for TS 7 comes from the TypeScriptTeam.native-preview extension.
+  // TS 7 uses the native-preview extension, not typescript.tsdk.
 
   "oxc.enable.oxlint": true,
   "oxc.enable.oxfmt": true,

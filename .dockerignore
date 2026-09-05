@@ -1,0 +1,36 @@
+# Shared build context for both app images.
+
+# Install platform-specific dependencies inside the image.
+node_modules
+**/node_modules
+
+# Pass secrets at runtime, never through the build context.
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Regenerated build outputs and caches.
+dist
+**/dist
+**/.next
+**/.turbo
+**/*.tsbuildinfo
+**/coverage
+# Generated clients.
+apps/be/src/database/generated
+packages/api-client/src/generated
+
+# Development-only files.
+.git
+.gitignore
+.github
+.husky
+.vscode
+**/*.md
+LICENSE
+docker-compose*.yml
+**/docker-compose*.yml
+.dockerignore
+**/Dockerfile
+scripts

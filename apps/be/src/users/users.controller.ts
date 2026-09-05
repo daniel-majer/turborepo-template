@@ -23,9 +23,7 @@ import { UpdateUserDto } from "./dto/update-user.dto.js";
 import { UserDto } from "./dto/user.dto.js";
 import { UsersService } from "./users.service.js";
 
-// Failures are not decorated anywhere: swagger.setup.ts gives every operation
-// a `default` response carrying ErrorEnvelopeDto, so 400/404/409 are already
-// described - and cannot be forgotten on the next route.
+// swagger.setup.ts adds the shared error response to every operation.
 @ApiTags("users")
 @Controller("users")
 export class UsersController {
@@ -33,7 +31,7 @@ export class UsersController {
 
   @Post()
   @ApiOperation({ summary: "Create a user" })
-  @ApiDataResponse(UserDto, { status: HttpStatus.CREATED })
+  @ApiDataResponse(UserDto)
   create(@Body() createUserDto: CreateUserDto): Promise<UserDto> {
     return this.usersService.create(createUserDto);
   }

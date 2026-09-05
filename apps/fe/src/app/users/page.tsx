@@ -8,24 +8,10 @@ import { Suspense } from "react";
 
 import { UsersPanel } from "./users-panel";
 
-/**
- * The server half of the prefetch/hydrate pattern: this component fetches the
- * list while it renders, ships the result in the html, and the client hook
- * below reads a warm cache instead of suspending on a request of its own.
- *
- * A QueryClient created here is per-request and thrown away; the one the
- * browser keeps lives in Providers.
- */
-/**
- * Rendered per request, never at build time.
- *
- * Without this Next prerenders the page during `next build`, the prefetch below
- * calls an api that is not running (in CI it never is), and the build fails on
- * ECONNREFUSED. User data is per-request anyway - a snapshot taken at build
- * time would be stale the moment anyone signs up.
- */
+/** Fetch user data per request, never during builds without a running API. */
 export const dynamic = "force-dynamic";
 
+/** Prefetch into a per-request cache; HydrationBoundary passes it to the client. */
 export default async function UsersPage() {
   const queryClient = new QueryClient();
 
@@ -40,13 +26,7 @@ export default async function UsersPage() {
       </p>
 
       <HydrationBoundary state={dehydrate(queryClient)}>
-        {/*
-          prefetchQuery never rejects, so an api that is down still gets here
-          with an empty cache and the suspense hook below asks again. Without
-          this boundary that second failure escapes to the root error.tsx and
-          replaces the whole page; with it, only the panel is affected - and
-          users/error.tsx catches the throw.
-        */}
+        {/* Failed prefetches leave an empty cache; show a fallback while the client retries. */}
         <Suspense
           fallback={
             <p className="text-muted-foreground mt-8 text-sm">Loading users…</p>

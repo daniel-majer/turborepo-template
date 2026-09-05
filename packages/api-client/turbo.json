@@ -3,8 +3,7 @@
   "extends": ["//"],
   "tasks": {
     "generate": {
-      // The spec itself is a global dependency (see the root config), so a
-      // contract change already busts this hash.
+      // The root globalDependencies already hashes the API spec.
       "inputs": ["orval.config.ts", "src/fetcher.ts", "package.json"],
       "outputs": ["src/generated/**"]
     },

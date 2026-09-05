@@ -7,14 +7,15 @@ UI components, TypeScript configs and tooling.
 
 ## Stack
 
-|                 |                                                      |
-| --------------- | ---------------------------------------------------- |
-| Package manager | bun 1.3.14                                           |
-| Build system    | Turborepo 2.10                                       |
-| Frontend        | Next.js 16 (App Router, Turbopack, React 19)         |
-| Styling         | Tailwind CSS v4 + shadcn/ui (Base UI, `nova` preset) |
-| Language        | TypeScript 7 (native Go port)                        |
-| Lint / format   | oxlint + oxfmt                                       |
+|                 |                                                                    |
+| --------------- | ------------------------------------------------------------------ |
+| Package manager | bun 1.3.14                                                         |
+| Build system    | Turborepo 2.10                                                     |
+| Frontend        | Next.js 16 (App Router, Turbopack, React 19)                       |
+| Styling         | Tailwind CSS v4 + shadcn/ui (Base UI, `nova` preset)               |
+| Language        | TypeScript 7 for frontend/packages; TS 6 for Nest compiler plugins |
+| Lint / format   | oxlint + oxfmt                                                     |
+| Deployment      | Docker images, published to ghcr.io by `release.yml`               |
 
 ## Structure
 
@@ -31,19 +32,21 @@ packages/
 ## Getting started
 
 ```bash
-bun install
-cp apps/fe/.env.example apps/fe/.env
-cp apps/be/.env.example apps/be/.env
-bun run --cwd apps/be docker:up
-bun run --cwd apps/be db:migrate
-bun run dev          # fe → http://localhost:3000, be → http://localhost:3001
+bun install                      # also generates the Prisma client and the API client
+bun run setup                    # copies every .env.example that does not exist yet
+bun run dev                      # starts Postgres + Redis, applies migrations, then both apps
+                                 # fe → http://localhost:3000, be → http://localhost:3001
+bun run --cwd apps/be db:seed    # optional: two sample users
 ```
 
 `http://localhost:3000/users` is a working end-to-end example: a page that
 lists, creates and deletes users through a client generated from the backend's
-OpenAPI spec. `http://localhost:3001/docs` is the Swagger UI for the same spec.
+OpenAPI spec. `http://localhost:3001/docs` is the Swagger UI for the same spec,
+and `http://localhost:3001/health/ready` says whether Postgres and Redis are
+reachable.
 
-Node 22+ (`.nvmrc`, enforced by `engines`) and bun 1.3.14 (`packageManager`).
+Use Node 22 (`.nvmrc`, CI and both Docker build/runtime stages) and bun 1.3.14
+(`packageManager`). The minimum supported Node version is 22.12.0.
 
 ## Make it yours
 
@@ -75,36 +78,44 @@ files that cannot contain comments:
   and remove the `api:sync` script here. Then `bun install`.
 - **`apps/fe/public/` and fonts** — swap the favicon/assets and the Geist fonts in
   `layout.tsx` for your own branding.
-- **CI** (optional) — `ci.yml` runs three parallel jobs (checks, unit tests, e2e
-  tests) on PRs and `main`; adjust for your branching model. Shared setup lives in
-  `.github/actions/setup`. For Vercel Remote Cache, add `TURBO_TOKEN` as a GitHub
-  Actions repository secret and `TURBO_TEAM` as a repository variable. The
-  workflow exposes both to Turbo; without them, the built-in `.turbo` cache via
-  `actions/cache` still works.
-- **Deploy** — not included, every project deploys somewhere else. A typical
-  workflow runs after CI on `main`: `bun run --cwd apps/be db:deploy` against the
-  production `DATABASE_URL`, then your platform's deploy command.
+- **CI** — `ci.yml` runs four parallel jobs (checks, unit tests, API e2e tests,
+  production-image smoke) on pull requests, and again as the first job of every
+  release; adjust for your
+  branching model. Shared setup lives in `.github/actions/setup`. For Vercel
+  Remote Cache, add `TURBO_TOKEN` as a GitHub Actions repository secret and
+  `TURBO_TEAM` as a repository variable. The workflow exposes both to Turbo;
+  without them, the built-in `.turbo` cache via `actions/cache` still works.
+- **Deployment** — `apps/*/Dockerfile`, `docker-compose.prod.yml`,
+  `.env.production.example` and `.github/workflows/release.yml` ship the apps as
+  two container images, see [Deployment](#deployment). After cloning: the `COPY`
+  lines at the top of both Dockerfiles list every workspace package (add yours),
+  the `name:` in `docker-compose.prod.yml` must be unique per host, and the
+  `NEXT_PUBLIC_APP_URL` / `NEXT_PUBLIC_API_URL` repository variables feed the
+  frontend image's build args.
 
 Everything else — `turbo.json`, git hooks, `commitlint`, the tsconfig presets and
 `components.json` — is project-agnostic and needs no changes.
 
 ## Commands
 
-| Command                       | What it does                            |
-| ----------------------------- | --------------------------------------- |
-| `bun run dev`                 | Start all dev servers                   |
-| `bun run build`               | Build all apps                          |
-| `bun run check-types`         | Type-check every package                |
-| `bun run lint`                | Lint the whole repo                     |
-| `bun run lint:fix`            | Lint and auto-fix                       |
-| `bun run format`              | Check formatting (fails if unformatted) |
-| `bun run format:fix`          | Format the repo                         |
-| `bun run boundaries`          | Check package isolation                 |
-| `bun run test`                | Unit tests in every package             |
-| `bun run test:e2e`            | e2e + integration tests (needs Docker)  |
-| `bun run api:sync`            | Regenerate the API spec and its client  |
-| `bun x turbo run quality`     | Run lint and format checks together     |
-| `bun x turbo run quality:fix` | Fix lint and formatting issues          |
+| Command                         | What it does                                               |
+| ------------------------------- | ---------------------------------------------------------- |
+| `bun run dev`                   | Start all dev servers                                      |
+| `bun run build`                 | Build all apps                                             |
+| `bun run check-types`           | Type-check every package                                   |
+| `bun run lint`                  | Lint the whole repo                                        |
+| `bun run lint:fix`              | Lint and auto-fix                                          |
+| `bun run format`                | Check formatting (fails if unformatted)                    |
+| `bun run format:fix`            | Format the repo                                            |
+| `bun run boundaries`            | Check package isolation                                    |
+| `bun run test`                  | Unit tests in every package                                |
+| `bun run test:e2e`              | e2e + integration tests (needs Docker)                     |
+| `bun run api:sync`              | Regenerate the API spec and its client                     |
+| `bun run setup`                 | Create the missing `.env` files                            |
+| `bun run --cwd apps/be db:seed` | Insert the sample rows                                     |
+| `bun run verify:images`         | Production images, API and SSR smoke checks (needs Docker) |
+| `bun x turbo run quality`       | Run lint and format checks together                        |
+| `bun x turbo run quality:fix`   | Fix lint and formatting issues                             |
 
 Root test scripts delegate to Turbo; quality uses `bun x` because it is a Turbo
 root-task aggregator. Neither form requires a global Turbo installation.
@@ -206,6 +217,15 @@ it, and a fresh clone can generate a client with no backend running.
 `packages/api-client/src/generated/` is not committed — it is rebuilt by the
 package's `postinstall`, the same way the Prisma client is.
 
+The Nest Swagger compiler plugin derives supported constraints from
+`class-validator` decorators: `@IsEmail()` and `@MaxLength()` do not need to be
+repeated in `@ApiProperty()`. Description/example overrides stay explicit.
+The Vitest DTO transformer reads the same plugin settings from `nest-cli.json`,
+and an integration test compares the complete served spec with the committed one.
+The backend and root tooling deliberately retain TypeScript 6: the Swagger
+plugin needs its JavaScript compiler API. The root declaration ensures Bun's
+fallback resolution does not pick the frontend's native TypeScript 7 package.
+
 Rename a field in a backend DTO, run `api:sync`, and `check-types` fails in
 whichever component still uses the old name. That is the whole point, and two
 pieces of wiring are what make it hold:
@@ -220,11 +240,81 @@ pieces of wiring are what make it hold:
   skips `fe` entirely and a breaking contract change merges green.
 
 Two environment variables connect the two sides, and they must agree:
-`FRONTEND_URL` in `apps/be/.env` is the origin CORS lets in, and
-`NEXT_PUBLIC_API_URL` in `apps/fe/.env` is where the browser sends requests.
-Server-side calls can override the second with `API_URL` when the Next process
-reaches the API by a different name than the browser does (a Docker service,
-say).
+`CORS_ORIGINS` in `apps/be/.env` lists the origins CORS lets in (comma
+separated, empty allows none), and `NEXT_PUBLIC_API_URL` in `apps/fe/.env` is
+where the browser sends requests - leave it unset when one reverse proxy serves
+both apps under a single origin. Server-side calls use `API_URL` instead when
+the Next process reaches the API by a different name than the browser does (a
+Docker service, say).
+
+## Deployment
+
+The template does not pick a host. It publishes a container image per app to
+the GitHub Container Registry and stops there, which is the last point that is
+the same everywhere - a VPS, Fly, Render, Coolify or Kubernetes all start from
+a pushed image.
+
+`.github/workflows/release.yml` runs on a push to `main` or a `v*` tag: CI
+first, then one image per app (`ghcr.io/<owner>/<repo>/be` and `.../fe`),
+tagged `latest` on the default branch, `sha-<commit>` always, and `1.2.3` /
+`1.2` for a semver tag. Both images build from the repository root, because
+each app reaches outside its own directory for workspace packages and the
+lockfile. Layers are cached in GitHub's build cache, per app.
+
+The last job POSTs to the `DEPLOY_HOOK_URL` secret if one exists, and reports
+"nothing was deployed" if not - nearly every host offers such a hook. Anything
+else (ssh, `flyctl`, `kubectl`) replaces that one step; the comments in the
+file sketch each.
+
+**Running the images.** `docker-compose.prod.yml` pulls both, plus Postgres
+and Redis, and is meant to be copied to a host along with a filled-in `.env`
+(see `.env.production.example`):
+
+```sh
+# once: a package pushed to ghcr.io is private until you say otherwise, so
+# either make both packages public in their GitHub package settings, or give
+# the host a read:packages token
+echo <token> | docker login ghcr.io --username <owner> --password-stdin
+
+docker compose --file docker-compose.prod.yml pull
+docker compose --file docker-compose.prod.yml up --detach --wait
+```
+
+A one-shot `migrate` service applies pending migrations before the api
+starts, and the api waits on `service_completed_successfully`, so a failed
+migration stops the deploy instead of leaving an api running against a schema
+it does not expect. The databases publish no host ports and the two apps bind
+to loopback, on the assumption that a reverse proxy on the host terminates
+TLS. Rolling back is `IMAGE_TAG=sha-<commit>` in `.env` followed by `pull` and
+`up`.
+
+Generate `POSTGRES_PASSWORD` with `openssl rand -hex 32`, not with the more
+common `base64` form: compose substitutes it into a `postgresql://` URL
+verbatim, and a `/` or `+` in a password changes what that URL means.
+
+The api connects as a role of its own (`APP_DB_USER`), created by an init
+script the first time Postgres starts on an empty volume, with read/write on
+the tables and nothing else; only the one-shot `migrate` job uses the owner.
+Redis requires `REDIS_PASSWORD`. The app containers run read-only with every
+capability dropped - the comments in the compose file say what each service
+keeps and why.
+
+`bun run verify:images` builds both images and starts `docker-compose.prod.yml`
+with disposable credentials, unique project/image names and random loopback
+ports. It checks migrations, the restricted runtime DB role through CRUD,
+non-root processes, health endpoints, validation, the error envelope, CORS,
+SSR, a cold boot without Redis, and readiness during a database outage.
+The verification command needs no browser installation. It prints container
+logs on failure and removes only its own Docker resources on exit; it never
+reuses the dev or API-test database.
+
+**Before the first deploy.** `PLATFORMS` in `release.yml` is `linux/amd64`;
+an ARM host (Oracle's free Ampere instances, AWS Graviton) needs `linux/arm64`
+added there and the QEMU step uncommented. And `NEXT_PUBLIC_*` variables are
+compiled into the frontend bundle, so they belong in the build args of the
+workflow (the `NEXT_PUBLIC_APP_URL` and `NEXT_PUBLIC_API_URL` repository
+variables), not in the environment of the running container, where they would
+be ignored.
 
 ## Git hooks
 
@@ -253,20 +343,30 @@ chore(tooling): enable type-aware linting
 
 ## CI
 
-`.github/workflows/ci.yml` covers quality, type checking, builds, boundaries,
-unit tests, and Docker-backed e2e/integration tests.
+`.github/workflows/ci.yml` runs on every pull request and, through
+`workflow_call`, as the first job of `release.yml` - so a push to `main` runs it
+once, as the release's gate, not twice. It covers quality, type checking,
+builds, boundaries, the API spec, unit tests, Docker-backed e2e/integration
+tests, and production-image smoke tests.
 
 ```bash
 bun x turbo run quality check-types --affected
-bun x turbo run build --affected
+bun x turbo run build --affected        # with SKIP_ENV_VALIDATION=true
 bun x turbo boundaries
+bun run --cwd apps/be api:spec          # then: is openapi.json unchanged?
 bun x turbo run test --affected
 bun x turbo run test:e2e --affected
+bun run verify:images                 # always runs, including infrastructure-only changes
 ```
 
 Type checking finishes before the build starts because both commands generate
-files under `dist` or `.next`. Unit and e2e tests run as separate jobs. On the
-default branch the workflow omits `--affected` and runs the full suite.
+files under `dist` or `.next`. The build sets `SKIP_ENV_VALIDATION=true`, the
+same escape hatch the image build uses, because a runner legitimately has no
+values for `apps/fe/src/env.ts`. The spec step regenerates `apps/be/openapi.json`
+and fails if it differs from the committed file - a controller changed without
+`bun run api:sync` would otherwise leave the generated client a version behind.
+Unit and e2e tests run as separate jobs. On the default branch the workflow
+omits `--affected` and runs the full suite.
 
 `--affected` limits the run to packages touched since the base branch, so it needs
 full git history (`fetch-depth: 0`). The `.turbo` directory is cached between runs.
@@ -276,6 +376,11 @@ internals instead of going through its `exports`.
 
 `HUSKY: 0` is set in the workflow — git hooks are pointless in CI, which runs
 the same checks directly.
+
+Every action is pinned to a commit rather than a movable tag. `renovate.json`
+configures dependency and action-pin updates, without automatic merging.
+Enable the Renovate GitHub App for the repository (or run it yourself); adding
+the configuration file alone does not start an updater.
 
 ### Hooks failing in a git GUI
 
@@ -302,6 +407,26 @@ cache hit. This includes `check-types`, since `incremental: true` makes
 `.next/types` and `next-env.d.ts` files generated by `next typegen`. Frontend
 `.env*` files are explicit task inputs, so environment changes invalidate those
 generated types.
+
+`db:generate` is a backend task with schema/config inputs and
+`src/database/generated/**` outputs. Backend build, type checking, tests and
+development startup depend on it, so deleting the generated client does not
+require reinstalling dependencies. Build and type checking use separate
+TypeScript incremental-cache files to avoid restoring each other's state.
+
+## Publishing this template
+
+The code and license can be shared as a template. Before making the repository
+public, review the full Git history for accidentally committed secrets (ignore
+rules do not remove old commits), enable GitHub's **Template repository** and
+**Private vulnerability reporting** settings, and install Renovate. Protect the
+default branch with required CI checks. See [CONTRIBUTING.md](CONTRIBUTING.md)
+for the contribution workflow and [SECURITY.md](SECURITY.md) for private reports.
+
+The `/users` example is deliberately unauthenticated. A real application still
+needs its own authentication/authorization, abuse controls, TLS, backups and
+monitoring before handling real user data. The Docker setup and tests verify
+the template's infrastructure; they do not supply those product-level decisions.
 
 ## License
 

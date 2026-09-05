@@ -1,17 +1,33 @@
 name: Setup
-description: Install bun, dependencies and restore the turbo cache. Run actions/checkout first.
+description: Install Node, bun, dependencies and restore the turbo cache. Run actions/checkout first.
+
+# Pin actions to immutable commits; Renovate updates them.
 
 runs:
   using: composite
   steps:
-    - uses: oven-sh/setup-bun@v2
+    - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
       with:
+        node-version-file: .nvmrc
+
+    - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      with:
+        # Match packageManager to keep lockfile resolution consistent.
         bun-version-file: package.json
 
+    - name: Restore the bun install cache
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      with:
+        path: ~/.bun/install/cache
+        key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+        restore-keys: bun-${{ runner.os }}-
+
     - shell: bash
+      # Postinstalls generate the Prisma and API clients.
       run: bun install --frozen-lockfile
 
-    - uses: actions/cache@v4
+    - name: Restore the turbo cache
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
       with:
         path: .turbo
         key: turbo-${{ runner.os }}-${{ github.job }}-${{ github.sha }}

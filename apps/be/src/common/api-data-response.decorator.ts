@@ -1,66 +1,118 @@
-import { applyDecorators, HttpStatus, Type } from "@nestjs/common";
+import {
+  applyDecorators,
+  HttpStatus,
+  RequestMethod,
+  type Type,
+} from "@nestjs/common";
+import { HTTP_CODE_METADATA, METHOD_METADATA } from "@nestjs/common/constants";
 import { ApiExtraModels, ApiResponse, getSchemaPath } from "@nestjs/swagger";
 
-/**
- * A DTO class, or - for a response that is not an object - a schema fragment.
- * Written out here rather than imported: @nestjs/swagger keeps SchemaObject
- * behind a deep path its package exports do not expose.
- */
+/** Local schema type: Swagger does not export SchemaObject through a public path. */
 type RawSchema = { type: string; format?: string; example?: unknown };
 
 type Content = Type<unknown> | RawSchema;
 
 interface ApiDataResponseOptions {
-  /** The handler returns a list of the model. */
+  /** Wrap the model as a list. */
   isArray?: boolean;
-  /** Defaults to 200; pass 201 on @Post routes. */
+  /** Override @HttpCode or the default status (POST: 201, otherwise 200). */
   status?: HttpStatus | number;
-  /**
-   * The route answers with `envelope(data, meta)`. Off by default: a `meta`
-   * documented on every response is a promise no handler here keeps, and the
-   * client generator turns each one into a model type nothing can receive.
-   */
+  /** Allow data: null, including handlers that return undefined. */
+  nullable?: boolean;
+  /** Include metadata returned with envelope(data, meta). */
   meta?: boolean;
 }
 
+interface Pending {
+  target: object;
+  propertyKey: string | symbol | undefined;
+  descriptor: PropertyDescriptor | undefined;
+  payload: object;
+  options: ApiDataResponseOptions;
+}
+
+// Apply responses after all controller decorators have run.
+const pending: Pending[] = [];
+let applied = 0;
+
 /**
- * Documents a success response the way TransformResponseInterceptor actually
- * sends it - the model wrapped in a `data` envelope - instead of the bare
- * model the handler returns.
- *
- *   @ApiDataResponse(UserDto)                     // { data: { ... } }
- *   @ApiDataResponse(UserDto, { isArray: true })  // { data: [ ... ] }
- *   @ApiDataResponse({ type: "string" })          // { data: "hello" }
- *   @ApiDataResponse(UserDto, { meta: true })     // { data, meta } - see envelope()
+ * Document the model inside a { data, meta? } envelope.
+ * Defer registration so @HttpCode and route metadata are available.
  */
 export function ApiDataResponse(
   content: Content,
   options: ApiDataResponseOptions = {},
 ) {
-  const { isArray = false, status = HttpStatus.OK, meta = false } = options;
-
   const isModel = typeof content === "function";
   const item = isModel ? { $ref: getSchemaPath(content) } : content;
-  const payload = isArray ? { type: "array" as const, items: item } : item;
+  const payload = options.isArray
+    ? { type: "array" as const, items: item }
+    : item;
 
   return applyDecorators(
-    // A model that appears only inside this hand-written schema is invisible
-    // to the scanner, so it has to be registered explicitly.
+    // Register models referenced only by this custom schema.
     ...(isModel ? [ApiExtraModels(content)] : []),
-    ApiResponse({
-      status,
+    (
+      target: object,
+      propertyKey?: string | symbol,
+      descriptor?: PropertyDescriptor,
+    ) => {
+      pending.push({ target, propertyKey, descriptor, payload, options });
+    },
+  );
+}
+
+/** Applies every recorded response as an @ApiResponse. Idempotent. */
+export function applyDataResponses(): void {
+  for (const entry of pending.slice(applied)) {
+    const { target, propertyKey, descriptor, payload, options } = entry;
+    const decorate = ApiResponse({
+      status: options.status ?? successStatusOf(descriptor?.value),
       schema: {
         type: "object",
         required: ["data"],
         properties: {
-          data: payload,
-          // Untyped on purpose: meta carries pagination or whatever a route
-          // needs, and pinning a shape here would be wrong for the next one.
-          ...(meta
+          data: options.nullable ? asNullable(payload) : payload,
+          // Metadata shape is route-specific.
+          ...(options.meta
             ? { meta: { type: "object", additionalProperties: true } }
             : {}),
         },
       },
-    }),
-  );
+    });
+
+    if (propertyKey === undefined || descriptor === undefined) {
+      // Class-level use: Nest passes only the constructor.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      decorate(target as Type<unknown>);
+    } else {
+      decorate(target, propertyKey, descriptor);
+    }
+  }
+
+  applied = pending.length;
+}
+
+// Match Swagger defaults: @HttpCode, otherwise POST 201 or 200.
+function successStatusOf(handler: unknown): number {
+  if (typeof handler !== "function") {
+    return HttpStatus.OK;
+  }
+
+  const httpCode: unknown = Reflect.getMetadata(HTTP_CODE_METADATA, handler);
+
+  if (typeof httpCode === "number") {
+    return httpCode;
+  }
+
+  return Reflect.getMetadata(METHOD_METADATA, handler) === RequestMethod.POST
+    ? HttpStatus.CREATED
+    : HttpStatus.OK;
+}
+
+// OpenAPI 3.0 requires allOf to make a $ref nullable.
+function asNullable<T extends object>(payload: T) {
+  return "$ref" in payload
+    ? { allOf: [payload], nullable: true }
+    : { ...payload, nullable: true };
 }

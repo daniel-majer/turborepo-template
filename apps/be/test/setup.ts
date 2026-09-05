@@ -18,20 +18,14 @@ export interface TestApp {
 }
 
 /**
- * Boots the real AppModule (Docker Postgres + Redis from .env.test) once per
- * test file, configured exactly like main.ts, and wipes the database and
- * cache after every test. Extra controllers/providers for the test can be
- * passed as module metadata.
- *
- *   const t = useTestApp();
- *   it("...", async () => { const res = await t.app.inject({ ... }); });
+ * Boot AppModule with .env.test services and production middleware once per test file.
+ * Delete test database rows and cache keys after each test.
  */
 export function useTestApp(metadata: ModuleMetadata = {}): TestApp {
   const state: Partial<TestApp> = {};
 
   beforeAll(async () => {
-    // Checked before anything connects, so a stray NODE_ENV or DATABASE_URL
-    // cannot point the suite at the dev services in the first place.
+    // Validate targets before connecting, so tests cannot touch dev services.
     assertSafeTestTargets();
 
     const moduleRef = await Test.createTestingModule({
@@ -60,8 +54,7 @@ export function useTestApp(metadata: ModuleMetadata = {}): TestApp {
     await state.app?.close();
   });
 
-  // Getters so a test that reads `t.app` before beforeAll ran fails loudly
-  // instead of with "cannot read property of undefined".
+  // Fail clearly if accessed before beforeAll completes.
   return {
     get app() {
       return ready(state.app, "app");

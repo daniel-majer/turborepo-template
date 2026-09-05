@@ -1,15 +1,18 @@
 import { Controller, Get, NotFoundException } from "@nestjs/common";
 
+import { ApiDataResponse } from "../src/common/api-data-response.decorator.js";
 import { useTestApp } from "./setup.js";
 
 @Controller("boom")
 class BoomController {
   @Get("http")
+  @ApiDataResponse({ type: "object" }, { nullable: true })
   httpError() {
     throw new NotFoundException("User not found");
   }
 
   @Get("unknown")
+  @ApiDataResponse({ type: "object" }, { nullable: true })
   unknownError() {
     throw new Error("db exploded: password=secret");
   }

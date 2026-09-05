@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 
 import { Controller, Get } from "@nestjs/common";
 
+import { ApiDataResponse } from "../src/common/api-data-response.decorator.js";
 import { useTestApp } from "./setup.js";
 
 const ERROR_REF = "#/components/schemas/ErrorEnvelopeDto";
@@ -9,12 +10,13 @@ const ERROR_REF = "#/components/schemas/ErrorEnvelopeDto";
 @Controller("boom")
 class BoomController {
   @Get()
+  @ApiDataResponse({ type: "object" }, { nullable: true })
   boom() {
     throw new Error("unexpected");
   }
 }
 
-/** Just enough of the document to assert on; the full type fights the tests. */
+/** OpenAPI fields used by these assertions. */
 interface Spec {
   openapi: string;
   paths: Record<
@@ -77,15 +79,27 @@ describe("OpenAPI document (e2e)", () => {
       await readFile(new URL("../openapi.json", import.meta.url), "utf8"),
     );
 
-    // The whole document, not a sample of it: the generator reads this file,
-    // so anything stale in it - a renamed property, a changed format, a new
-    // query parameter - is a client built against an api that no longer
-    // exists. Run `bun run api:sync`.
+    // Compare the full contract, excluding the test-only route. Update with bun run api:sync.
     const paths = Object.fromEntries(
       Object.entries(doc.paths).filter(([path]) => path !== "/boom"),
     );
 
     expect({ ...doc, paths }).toEqual(committed);
+  });
+
+  it("derives validation constraints from DTO validators, including mapped types", async () => {
+    const doc = await spec();
+    const create = doc.components.schemas.CreateUserDto;
+    const update = doc.components.schemas.UpdateUserDto;
+
+    expect(create?.properties?.email).toMatchObject({
+      type: "string",
+      format: "email",
+      maxLength: 255,
+    });
+    expect(create?.required).toContain("email");
+    expect(update?.properties?.email).toEqual(create?.properties?.email);
+    expect(update?.required ?? []).not.toContain("email");
   });
 
   describe("success responses", () => {
@@ -108,9 +122,7 @@ describe("OpenAPI document (e2e)", () => {
       const doc = await spec();
       const schema = schemaOf(doc, "/users/{id}", "get", "200");
 
-      // meta is opt-in (`@ApiDataResponse(Dto, { meta: true })`). Documenting
-      // it everywhere would generate a model type per route that no handler
-      // can ever produce.
+      // Metadata must be explicitly enabled with { meta: true }.
       expect(properties(schema)).toEqual(["data"]);
     });
 
@@ -165,14 +177,14 @@ describe("OpenAPI document (e2e)", () => {
       const body = res.json();
 
       expect(res.statusCode).toBe(404);
-      // Nothing documented as always-present is missing...
+      // All required fields must be present.
       expect(Object.keys(body)).toEqual(
         expect.arrayContaining(envelope.required ?? []),
       );
       expect(Object.keys(body.error)).toEqual(
         expect.arrayContaining(error.required ?? []),
       );
-      // ...and nothing is sent that the spec does not mention.
+      // All returned fields must be documented.
       expect(Object.keys(error.properties ?? {})).toEqual(
         expect.arrayContaining(Object.keys(body.error)),
       );

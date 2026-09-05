@@ -1,8 +1,4 @@
-/**
- * Commitlint configuration
- * @type {import("@commitlint/types").UserConfig}
- * https://www.conventionalcommits.org/en/v1.0.0/#summary
- */
+/** @type {import("@commitlint/types").UserConfig} */
 export default {
   extends: ["@commitlint/config-conventional"],
   rules: {

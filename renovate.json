@@ -1,0 +1,18 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "automerge": false,
+  "semanticCommits": "enabled",
+  "semanticCommitType": "chore",
+  "semanticCommitScope": "deps",
+  "packageRules": [
+    {
+      "matchPackageNames": ["@nestjs/**"],
+      "groupName": "NestJS"
+    },
+    {
+      "matchPackageNames": ["prisma", "@prisma/**"],
+      "groupName": "Prisma"
+    }
+  ]
+}

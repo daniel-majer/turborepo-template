@@ -4,17 +4,13 @@ import * as z from "zod";
 export const env = createEnv({
   server: {
     NODE_ENV: z.enum(["development", "test", "production"]),
-    /**
-     * How this process reaches the api from inside the network - a Docker
-     * service name rather than a public host. Optional: without it server-side
-     * calls fall back to NEXT_PUBLIC_API_URL, which is right on a laptop.
-     */
+    /** Server-only API address; falls back to NEXT_PUBLIC_API_URL. */
     API_URL: z.url().optional(),
   },
   client: {
     NEXT_PUBLIC_APP_URL: z.url(),
-    /** Public address of the api, compiled into the browser bundle. */
-    NEXT_PUBLIC_API_URL: z.url(),
+    /** Build-time browser API URL; unset means same origin. */
+    NEXT_PUBLIC_API_URL: z.url().optional(),
   },
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
@@ -23,4 +19,6 @@ export const env = createEnv({
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
   },
   emptyStringAsUndefined: true,
+  // Skip validation for CI/image builds; instrumentation validates at server startup.
+  skipValidation: process.env.SKIP_ENV_VALIDATION === "true",
 });

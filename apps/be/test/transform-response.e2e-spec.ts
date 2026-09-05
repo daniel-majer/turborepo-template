@@ -1,33 +1,38 @@
 import { Controller, Get } from "@nestjs/common";
 
+import { ApiDataResponse } from "../src/common/api-data-response.decorator.js";
 import { envelope } from "../src/common/transform-response.interceptor.js";
 import { useTestApp } from "./setup.js";
 
 @Controller("shapes")
 class ShapesController {
   @Get("object")
+  @ApiDataResponse({ type: "object" })
   object() {
     return { id: 1, name: "Anna" };
   }
 
   @Get("nothing")
+  @ApiDataResponse({ type: "object" }, { nullable: true })
   nothing() {
     return undefined;
   }
 
   @Get("false")
+  @ApiDataResponse({ type: "boolean" })
   falsy() {
     return false;
   }
 
   @Get("paginated")
+  @ApiDataResponse({ type: "integer" }, { isArray: true, meta: true })
   paginated() {
     return envelope([1, 2, 3], { pages: 10 });
   }
 
-  // A row that happens to carry `data` and `meta` columns is a payload, not
-  // an envelope: it has to end up nested inside one.
+  // Payload fields named data/meta must not bypass wrapping.
   @Get("lookalike")
+  @ApiDataResponse({ type: "object" })
   lookalike() {
     return { data: "column", meta: "column" };
   }

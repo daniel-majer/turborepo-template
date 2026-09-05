@@ -13,12 +13,10 @@ import { useState } from "react";
 
 export function UsersPanel() {
   const queryClient = useQueryClient();
-  // Suspense variant: the data is already in the cache from the server
-  // prefetch, so this renders on the first pass with no loading state.
+  // Read the server-prefetched cache.
   const { data } = useUsersFindAllSuspense();
 
-  // Both mutations refetch the list rather than patching the cache by hand -
-  // the shorter path to a correct ui, and the one to start from.
+  // Refetch the list after either mutation.
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: getUsersFindAllQueryKey() });
 
@@ -31,12 +29,7 @@ export function UsersPanel() {
   function submit(event: React.FormEvent) {
     event.preventDefault();
 
-    // Normalized first, exactly as CreateUserDto's @Transform does on the
-    // server. class-transformer runs before class-validator, so the backend
-    // validates the trimmed value - but a @Transform is invisible to the
-    // OpenAPI spec, so the generated schema only ever sees the raw string.
-    // Skip this and a pasted "  ada@example.com " is rejected here and
-    // accepted there.
+    // Match CreateUserDto normalization; OpenAPI does not capture @Transform.
     const parsed = UsersCreateBody.safeParse({
       email: email.trim().toLowerCase(),
     });
@@ -65,9 +58,7 @@ export function UsersPanel() {
         </Button>
       </form>
 
-      {/* Client-side rejection, then whatever the backend answered - for
-          both mutations: a delete that 404s because another tab got there
-          first would otherwise leave the row in place with no explanation. */}
+      {/* Show validation and API errors for both mutations. */}
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       {create.error && (
         <p className="mt-2 text-sm text-red-600">

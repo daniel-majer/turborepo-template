@@ -1,0 +1,107 @@
+name: Release
+
+# Publish app images to GHCR, then optionally trigger a deploy hook.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+# Queue releases to avoid partially published image sets.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+# Pin actions to immutable commits; Renovate updates them.
+
+env:
+  # TODO(template): for ARM, add linux/arm64 and enable the QEMU step below.
+  PLATFORMS: linux/amd64
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  images:
+    name: Publish ${{ matrix.app }}
+    needs: ci
+    runs-on: ubuntu-latest
+    strategy:
+      # One failing build must not hide the other's result.
+      fail-fast: false
+      matrix:
+        # TODO(template): add each app directory that has a Dockerfile.
+        app: [be, fe]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # - name: Enable emulation for foreign architectures
+      #   uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+
+      - name: Set up buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Log in to the registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive tags and labels
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.app }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+          labels: |
+            org.opencontainers.image.title=${{ matrix.app }}
+
+      - name: Build and push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          # Dockerfiles need the repository root as their build context.
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          platforms: ${{ env.PLATFORMS }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # TODO(template): set these repository variables; add build args for new public values.
+          # NEXT_PUBLIC_* values are baked into browser code. Never put secrets here.
+          build-args: |
+            NEXT_PUBLIC_APP_URL=${{ vars.NEXT_PUBLIC_APP_URL }}
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+          # Keep build caches separate per app.
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+  deploy:
+    name: Deploy
+    needs: images
+    runs-on: ubuntu-latest
+    # Add required reviewers and DEPLOY_HOOK_URL to the production environment.
+    environment: production
+    steps:
+      # TODO(template): set DEPLOY_HOOK_URL or replace this step for your host.
+      - name: Trigger the deploy hook
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$DEPLOY_HOOK_URL" ]; then
+            echo "No DEPLOY_HOOK_URL secret is set, so nothing was deployed." >> "$GITHUB_STEP_SUMMARY"
+            echo "The images are published; pull them on the host with docker-compose.prod.yml." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          curl --fail --silent --show-error --request POST "$DEPLOY_HOOK_URL"

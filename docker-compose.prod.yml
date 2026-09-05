@@ -1,0 +1,185 @@
+# Production setup: README.md and .env.production.example.
+# TODO(template): choose a unique project name to isolate volumes.
+name: turborepo-template-prod
+
+# Use one explicit repository prefix and tag for both apps.
+x-images:
+  be: &be-image ${IMAGE_REPO:?set IMAGE_REPO in .env, e.g. ghcr.io/owner/repository}/be:${IMAGE_TAG:-latest}
+
+# Limit logs to 30 MB per service.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# Block privilege escalation; app containers also run read-only.
+x-hardened: &hardened
+  security_opt:
+    - no-new-privileges:true
+
+x-app: &app
+  <<: *hardened
+  restart: unless-stopped
+  logging: *logging
+  read_only: true
+  cap_drop:
+    - ALL
+
+x-store-capabilities: &store-capabilities
+  cap_drop:
+    - ALL
+  cap_add:
+    - CHOWN
+    - DAC_OVERRIDE
+    - FOWNER
+    - SETGID
+    - SETUID
+
+configs:
+  # Create the restricted app role on an empty volume; existing databases need manual setup.
+  postgres-init:
+    content: |
+      #!/bin/sh
+      set -eu
+      psql -v ON_ERROR_STOP=1 --username "$$POSTGRES_USER" --dbname "$$POSTGRES_DB" <<-SQL
+        CREATE ROLE "${APP_DB_USER:-app}" LOGIN PASSWORD '${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env}';
+        GRANT CONNECT ON DATABASE "$$POSTGRES_DB" TO "${APP_DB_USER:-app}";
+        GRANT USAGE ON SCHEMA public TO "${APP_DB_USER:-app}";
+        ALTER DEFAULT PRIVILEGES FOR ROLE "$$POSTGRES_USER" IN SCHEMA public
+          GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "${APP_DB_USER:-app}";
+        ALTER DEFAULT PRIVILEGES FOR ROLE "$$POSTGRES_USER" IN SCHEMA public
+          GRANT USAGE, SELECT ON SEQUENCES TO "${APP_DB_USER:-app}";
+      SQL
+
+services:
+  postgres:
+    <<: [*hardened, *store-capabilities]
+    image: postgres:17-alpine
+    restart: unless-stopped
+    logging: *logging
+    # Database access is private to the Compose network.
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+    configs:
+      - source: postgres-init
+        target: /docker-entrypoint-initdb.d/10-app-role.sh
+        mode: 0555
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # Use TCP to avoid reporting the temporary initdb server as healthy.
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    <<: [*hardened, *store-capabilities]
+    image: redis:7-alpine
+    restart: unless-stopped
+    logging: *logging
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Run migrations as the database owner before starting the restricted API role.
+  migrate:
+    <<: *app
+    image: *be-image
+    restart: "no"
+    tmpfs:
+      - /tmp
+    command: ["./node_modules/.bin/prisma", "migrate", "deploy"]
+    environment:
+      # Passwords go into URLs verbatim; generate URL-safe hex values.
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-app}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    image: *be-image
+    # Start only after migrations succeed.
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    tmpfs:
+      - /tmp
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Use private service addresses inside Compose.
+      DATABASE_URL: postgresql://${APP_DB_USER:-app}:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-app}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      # Use a unique namespace per project.
+      CACHE_NAMESPACE: ${CACHE_NAMESPACE:?set CACHE_NAMESPACE in .env}
+      # TODO(template): allowed frontend origins; empty disables cross-origin access.
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+    ports:
+      # Expose apps only to the host's TLS reverse proxy.
+      - "127.0.0.1:${API_PORT:-3001}:3001"
+    healthcheck:
+      # Database failure is unhealthy; cache failure is degraded but ready.
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--spider",
+          "http://127.0.0.1:3001/health/ready",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  web:
+    <<: *app
+    image: ${IMAGE_REPO:?set IMAGE_REPO in .env}/fe:${IMAGE_TAG:-latest}
+    tmpfs:
+      - /tmp
+      # Writable Next image/data cache.
+      - /app/apps/fe/.next/cache
+    environment:
+      NODE_ENV: production
+      # Set NEXT_PUBLIC_* in release build args, not at runtime.
+      API_URL: http://api:3001
+      PORT: 3000
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  postgres_data:
+  redis_data:

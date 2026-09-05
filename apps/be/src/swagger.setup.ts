@@ -6,15 +6,14 @@ import {
   SwaggerModule,
 } from "@nestjs/swagger";
 
+import { applyDataResponses } from "./common/api-data-response.decorator.js";
 import { ErrorEnvelopeDto } from "./common/error-envelope.dto.js";
 
-/**
- * One definition of the document, used by two callers: scripts/generate-openapi.ts
- * writes it to openapi.json for the client generator, and configureApp() serves
- * it at /docs outside production. A spec built differently from the one that is
- * served is a spec nobody can trust.
- */
+/** Build the same contract for Swagger UI and the committed OpenAPI spec. */
 export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
+  // Must run before the explorer reads the metadata.
+  applyDataResponses();
+
   const config = new DocumentBuilder()
     .setTitle("API")
     .setDescription(
@@ -24,13 +23,14 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     .build();
 
   const document = SwaggerModule.createDocument(app, config, {
-    // Referenced by $ref from the default response below, so it has to be
-    // registered even though no route declares it as a type.
+    // Register the model referenced by each default error response.
     extraModels: [ErrorEnvelopeDto],
     operationIdFactory,
   });
 
-  return withDefaultErrorResponse(document);
+  return assertEveryOperationDescribesItsPayload(
+    withDefaultErrorResponse(document),
+  );
 }
 
 /** Serves Swagger UI at /docs and the raw spec at /docs-json. */
@@ -40,12 +40,7 @@ export function setupSwagger(app: INestApplication) {
   });
 }
 
-/**
- * The operationId is what a generator names its output after, so it has to be
- * unique across the whole api: `findAll` alone would collide the moment a
- * second controller has one. UsersController.findAll becomes `usersFindAll`,
- * and the generated hook `useUsersFindAll`.
- */
+/** Prefix operation IDs with the controller to avoid generated-client name collisions. */
 function operationIdFactory(controllerKey: string, methodKey: string): string {
   const controller = controllerKey.replace(/Controller$/, "");
   const prefix = controller.charAt(0).toLowerCase() + controller.slice(1);
@@ -53,15 +48,60 @@ function operationIdFactory(controllerKey: string, methodKey: string): string {
   return `${prefix}${methodKey.charAt(0).toUpperCase()}${methodKey.slice(1)}`;
 }
 
-/**
- * Every route can fail and every failure goes through AllExceptionsFilter, so
- * the error envelope belongs on every operation. `default` covers any status
- * the route does not list, which is why no handler needs an error decorator.
- */
+// Responses that have no body by definition.
+const EMPTY_BODY_STATUSES = new Set(["204", "205"]);
+
+/** Document the shared error envelope for every operation. */
 function withDefaultErrorResponse(document: OpenAPIObject): OpenAPIObject {
-  for (const pathItem of Object.values(document.paths)) {
-    // A path item also holds non-operation keys such as `parameters` and `$ref`.
-    for (const operation of Object.values(pathItem)) {
+  for (const { operation } of operationsOf(document)) {
+    operation.responses.default ??= errorResponse();
+  }
+
+  return document;
+}
+
+/** Fail generation if a success payload lacks a schema; otherwise hooks become untyped. */
+function assertEveryOperationDescribesItsPayload(
+  document: OpenAPIObject,
+): OpenAPIObject {
+  const undescribed: string[] = [];
+
+  for (const { label, operation } of operationsOf(document)) {
+    const success = Object.entries(operation.responses).filter(([status]) =>
+      status.startsWith("2"),
+    );
+    const complete =
+      success.length > 0 &&
+      success.every(
+        ([status, response]) =>
+          EMPTY_BODY_STATUSES.has(status) || describesContent(response),
+      );
+
+    if (!complete) {
+      undescribed.push(label);
+    }
+  }
+
+  if (undescribed.length > 0) {
+    throw new Error(
+      `These routes describe no response payload: ${undescribed.join(", ")}. ` +
+        "Every handler needs @ApiDataResponse with the shape it returns.",
+    );
+  }
+
+  return document;
+}
+
+function describesContent(response: unknown): boolean {
+  return (
+    typeof response === "object" && response !== null && "content" in response
+  );
+}
+
+// Skip non-operation keys such as parameters and $ref.
+function* operationsOf(document: OpenAPIObject) {
+  for (const [route, pathItem] of Object.entries(document.paths)) {
+    for (const [method, operation] of Object.entries(pathItem)) {
       if (
         typeof operation !== "object" ||
         operation === null ||
@@ -71,17 +111,12 @@ function withDefaultErrorResponse(document: OpenAPIObject): OpenAPIObject {
         continue;
       }
 
-      operation.responses.default ??= errorResponse();
+      yield { label: `${method.toUpperCase()} ${route}`, operation };
     }
   }
-
-  return document;
 }
 
-/**
- * A fresh object per operation. One shared reference would mean a later
- * per-route tweak silently rewrites every other route's default response.
- */
+/** Keep response objects independent so route-specific changes stay local. */
 function errorResponse() {
   return {
     description:

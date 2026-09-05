@@ -1,35 +1,36 @@
 import fastifyHelmet from "@fastify/helmet";
+import { Logger } from "@nestjs/common";
 import type { ConfigType } from "@nestjs/config";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
-import { Logger } from "nestjs-pino";
+import { Logger as PinoLogger } from "nestjs-pino";
 
 import { appConfig } from "./config/index.js";
 import { setupSwagger } from "./swagger.setup.js";
 
-/**
- * Everything that main.ts does to the app after `NestFactory.create`.
- * Shared with the e2e test setup so tests run against the same middleware
- * as the real server.
- */
+/** Shared middleware setup for the server and integration tests. */
 export async function configureApp(app: NestFastifyApplication) {
-  app.useLogger(app.get(Logger));
+  app.useLogger(app.get(PinoLogger));
   await app.register(fastifyHelmet);
 
   const config = app.get<ConfigType<typeof appConfig>>(appConfig.KEY);
 
-  // The generated client sends cookies (`credentials: "include"`), so the
-  // browser requires an exact origin here and refuses a wildcard.
-  //
-  // `methods` is spelled out because the underlying @fastify/cors defaults to
-  // GET, HEAD and POST only - leave it off and every PATCH and DELETE fails
-  // its preflight in the browser while curl keeps working.
-  app.enableCors({
-    origin: config.frontendUrl,
-    credentials: true,
-    methods: ["GET", "HEAD", "POST", "PATCH", "PUT", "DELETE"],
-  });
+  // Report browser-only CORS failures at startup.
+  if (config.corsOrigins.length === 0) {
+    new Logger("configureApp").warn(
+      "CORS_ORIGINS is empty - a browser on another origin cannot call this api. " +
+        "Set it to the frontend's origin, e.g. http://localhost:3000",
+    );
+  } else {
+    // Cookie requests require explicit origins; wildcards are invalid.
+    // Allow PATCH/PUT/DELETE explicitly so their preflight requests succeed.
+    app.enableCors({
+      origin: config.corsOrigins,
+      credentials: true,
+      methods: ["GET", "HEAD", "POST", "PATCH", "PUT", "DELETE"],
+    });
+  }
 
-  if (config.nodeEnv !== "production") {
+  if (!config.isProduction) {
     setupSwagger(app);
   }
 }

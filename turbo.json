@@ -1,12 +1,12 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
-  // The generated API client is gitignored, and turbo hashes only tracked
-  // files - so a task that consumes it would replay a stale cache after the
-  // contract changed. The committed spec every generated file derives from is
-  // a global dependency instead: change it and nothing is cached.
+  // Hash the committed spec because generated clients are gitignored.
   "globalDependencies": ["apps/be/openapi.json"],
   "tasks": {
+    "db:generate": {
+      "outputs": []
+    },
     "generate": {
       "outputs": ["src/generated/**"]
     },
@@ -17,7 +17,9 @@
       "dependsOn": ["^build", "^generate"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"],
-      "env": ["NODE_ENV", "API_URL"]
+      "env": ["NODE_ENV", "API_URL"],
+      // Validation-only flag; it does not affect build output.
+      "passThroughEnv": ["SKIP_ENV_VALIDATION"]
     },
     "check-types": {
       "dependsOn": ["transit", "^generate"],

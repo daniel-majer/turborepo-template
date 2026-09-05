@@ -17,8 +17,18 @@ async function bootstrap() {
   );
 
   await configureApp(app);
+  // Buffered bootstrap logs would otherwise be lost on a failure below.
+  app.flushLogs();
+  // Close the Prisma pool on SIGTERM.
+  app.enableShutdownHooks();
 
   const config = app.get<ConfigType<typeof appConfig>>(appConfig.KEY);
+  // Fastify binds to localhost by default; a container needs 0.0.0.0.
   await app.listen(config.port, "0.0.0.0");
 }
-await bootstrap();
+
+bootstrap().catch((error: unknown) => {
+  // The logger may not exist yet.
+  console.error(error);
+  process.exit(1);
+});

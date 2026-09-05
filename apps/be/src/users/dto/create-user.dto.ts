@@ -4,13 +4,10 @@ import { IsEmail, MaxLength } from "class-validator";
 
 export class CreateUserDto {
   @ApiProperty({
-    format: "email",
-    maxLength: 255,
     description: "Trimmed and lowercased before it is stored.",
     example: "ada@example.com",
   })
-  // Normalized before validation so "  Ada@Example.com " and
-  // "ada@example.com" cannot both slip past the unique constraint.
+  // Normalize before validation and unique checks.
   @Transform(({ value }) =>
     typeof value === "string" ? value.trim().toLowerCase() : value,
   )

@@ -37,6 +37,19 @@ export function assertSafeTestTargets(
       'Refusing test cleanup: database name must end with "_test"',
     );
   }
+
+  // Restrict clear() to the disposable test namespace.
+  const namespace = runtimeEnv.CACHE_NAMESPACE;
+  if (!namespace || namespace !== testFileEnv.CACHE_NAMESPACE) {
+    throw new Error(
+      "Refusing test cleanup: CACHE_NAMESPACE does not match .env.test",
+    );
+  }
+  if (!namespace.endsWith("-test")) {
+    throw new Error(
+      'Refusing test cleanup: cache namespace must end with "-test"',
+    );
+  }
 }
 
 function readUrl(environment: Environment, name: string): URL {

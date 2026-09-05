@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
-/** What AllExceptionsFilter puts in `error`. Nothing constructs it at runtime. */
+/** Swagger schema for AllExceptionsFilter's error body. */
 class ApiErrorDto {
   @ApiProperty({ type: "integer", example: 404 })
   statusCode: number;
@@ -25,13 +25,9 @@ class ApiErrorDto {
   path: string;
 }
 
-/**
- * The wire shape of any failure. Referenced by the `default` response every
- * operation gets in swagger.setup.ts.
- */
+/** Default error response schema for every API operation. */
 export class ErrorEnvelopeDto {
-  // OpenAPI 3.0 has no `type: "null"`; a nullable object says the same thing,
-  // and this field is never anything but null.
+  // OpenAPI 3.0 represents this null field as a nullable object.
   @ApiProperty({
     type: "object",
     nullable: true,

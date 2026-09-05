@@ -2,11 +2,7 @@ import { ApiProperty } from "@nestjs/swagger";
 
 import type { User } from "../../database/generated/client.js";
 
-/**
- * The public shape of a user. Built explicitly instead of returning the
- * Prisma model, so adding a column (password hash, tokens, ...) never leaks
- * it through the API by accident.
- */
+/** Explicit public fields prevent new database columns from leaking through the API. */
 export class UserDto {
   @ApiProperty({ type: "integer", example: 1 })
   id: number;

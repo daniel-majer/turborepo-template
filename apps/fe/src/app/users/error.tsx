@@ -1,9 +1,6 @@
 "use client";
 
-/**
- * Scoped to this route: a failed api call replaces the list, not the whole
- * application. Next requires an error boundary to be a client component.
- */
+/** Keep API failures inside this route; Next requires a client error boundary. */
 export default function UsersError({
   error,
   reset,

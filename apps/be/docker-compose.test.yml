@@ -1,6 +1,5 @@
-# Throwaway Postgres + Redis for e2e/integration tests. Runs next to the dev
-# stack on different ports and keeps no volumes, so every run starts clean.
-# TODO(template): Change this together with the dev Compose project name.
+# Disposable test stack with separate ports and no volumes.
+# TODO(template): rename this alongside the dev Compose project.
 name: turborepo-template-be-test
 
 services:
@@ -16,8 +15,7 @@ services:
     tmpfs:
       - /var/lib/postgresql/data
     healthcheck:
-      # Hardcoded: Compose would interpolate ${...} from the dev `.env`,
-      # not from the `environment:` block above.
+      # Hardcoded to avoid interpolation from the dev .env.
       test: ["CMD-SHELL", "pg_isready -U postgres -d app_test"]
       interval: 2s
       timeout: 3s
