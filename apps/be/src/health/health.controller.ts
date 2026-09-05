@@ -20,7 +20,7 @@ const HEALTH_KEY = "__health__";
 const HEALTH_KEY_TTL_MS = 1_000;
 
 /**
- * Use /health/live for restarts and /health/ready for traffic routing.
+ * Use /api/health/live for restarts and /api/health/ready for routing.
  * Database failure is unready; cache failure is degraded but ready.
  */
 @ApiTags("health")

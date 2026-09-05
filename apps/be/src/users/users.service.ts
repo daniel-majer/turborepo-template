@@ -5,11 +5,17 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 
+import {
+  envelope,
+  type Envelope,
+} from "../common/transform-response.interceptor.js";
 import { DatabaseService } from "../database/database.service.js";
 import { Prisma } from "../database/generated/client.js";
 import { CreateUserDto } from "./dto/create-user.dto.js";
 import { UpdateUserDto } from "./dto/update-user.dto.js";
 import { UserDto } from "./dto/user.dto.js";
+import { UsersPageMetaDto } from "./dto/users-page-meta.dto.js";
+import { UsersQueryDto } from "./dto/users-query.dto.js";
 
 const UNIQUE_CONSTRAINT = "P2002";
 const RECORD_NOT_FOUND = "P2025";
@@ -27,9 +33,25 @@ export class UsersService {
     }
   }
 
-  async findAll(): Promise<UserDto[]> {
-    const users = await this.db.user.findMany({ orderBy: { id: "asc" } });
-    return users.map((user) => UserDto.from(user));
+  async findAll({
+    take,
+    cursor,
+  }: UsersQueryDto): Promise<Envelope<UserDto[], UsersPageMetaDto>> {
+    const users = await this.db.user.findMany({
+      ...(cursor === undefined ? {} : { where: { id: { gt: cursor } } }),
+      orderBy: { id: "asc" },
+      take: take + 1,
+    });
+    const hasNextPage = users.length > take;
+    const page = users.slice(0, take);
+
+    return envelope(
+      page.map((user) => UserDto.from(user)),
+      {
+        nextCursor: hasNextPage ? (page.at(-1)?.id ?? null) : null,
+        hasNextPage,
+      },
+    );
   }
 
   async findOne(id: number): Promise<UserDto> {

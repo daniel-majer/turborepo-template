@@ -16,6 +16,7 @@ process.env.CACHE_NAMESPACE ??= "openapi";
 async function generate() {
   // Import after setting placeholders: ConfigModule validates during module loading.
   const { AppModule } = await import("../app.module.js");
+  const { API_PREFIX } = await import("../api-prefix.js");
   const { buildOpenApiDocument } = await import("../swagger.setup.js");
 
   // Use the production adapter; Nest otherwise defaults to Express.
@@ -24,6 +25,8 @@ async function generate() {
     preview: true,
     logger: false,
   });
+
+  app.setGlobalPrefix(API_PREFIX);
 
   const document = buildOpenApiDocument(app);
 

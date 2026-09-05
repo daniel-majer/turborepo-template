@@ -20,9 +20,15 @@ class ApiErrorDto {
 
   @ApiProperty({
     description: "The request path that failed.",
-    example: "/users/42",
+    example: "/api/users/42",
   })
   path: string;
+
+  @ApiProperty({
+    format: "uuid",
+    example: "ad82cc5c-3eb9-4b5c-8d6f-e3f8c99197b3",
+  })
+  requestId: string;
 }
 
 /** Default error response schema for every API operation. */

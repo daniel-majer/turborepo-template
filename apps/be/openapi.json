@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.0",
   "paths": {
-    "/": {
+    "/api": {
       "get": {
         "operationId": "appGetHello",
         "parameters": [],
@@ -41,7 +41,7 @@
         ]
       }
     },
-    "/health/live": {
+    "/api/health/live": {
       "get": {
         "operationId": "healthLive",
         "parameters": [],
@@ -81,7 +81,7 @@
         ]
       }
     },
-    "/health/ready": {
+    "/api/health/ready": {
       "get": {
         "operationId": "healthReady",
         "parameters": [],
@@ -121,7 +121,7 @@
         ]
       }
     },
-    "/users": {
+    "/api/users": {
       "post": {
         "operationId": "usersCreate",
         "parameters": [],
@@ -172,7 +172,29 @@
       },
       "get": {
         "operationId": "usersFindAll",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "take",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 2147483647,
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -181,7 +203,8 @@
                 "schema": {
                   "type": "object",
                   "required": [
-                    "data"
+                    "data",
+                    "meta"
                   ],
                   "properties": {
                     "data": {
@@ -189,6 +212,9 @@
                       "items": {
                         "$ref": "#/components/schemas/UserDto"
                       }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/UsersPageMetaDto"
                     }
                   }
                 }
@@ -206,13 +232,13 @@
             }
           }
         },
-        "summary": "List all users, ordered by id",
+        "summary": "List a page of users, ordered by id",
         "tags": [
           "users"
         ]
       }
     },
-    "/users/{id}": {
+    "/api/users/{id}": {
       "get": {
         "operationId": "usersFindOne",
         "parameters": [
@@ -468,6 +494,24 @@
           "email"
         ]
       },
+      "UsersPageMetaDto": {
+        "type": "object",
+        "properties": {
+          "nextCursor": {
+            "type": "integer",
+            "nullable": true,
+            "example": 20
+          },
+          "hasNextPage": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "nextCursor",
+          "hasNextPage"
+        ]
+      },
       "UpdateUserDto": {
         "type": "object",
         "properties": {
@@ -509,14 +553,20 @@
           "path": {
             "type": "string",
             "description": "The request path that failed.",
-            "example": "/users/42"
+            "example": "/api/users/42"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "ad82cc5c-3eb9-4b5c-8d6f-e3f8c99197b3"
           }
         },
         "required": [
           "statusCode",
           "message",
           "timestamp",
-          "path"
+          "path",
+          "requestId"
         ]
       },
       "ErrorEnvelopeDto": {

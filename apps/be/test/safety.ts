@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 
 import { parse } from "dotenv";
 
+import { cacheNamespaceSchema } from "../src/config/env.js";
+
 type Environment = Readonly<Record<string, string | undefined>>;
 
 /** Refuses destructive cleanup unless both services match the local test config. */
@@ -43,6 +45,11 @@ export function assertSafeTestTargets(
   if (!namespace || namespace !== testFileEnv.CACHE_NAMESPACE) {
     throw new Error(
       "Refusing test cleanup: CACHE_NAMESPACE does not match .env.test",
+    );
+  }
+  if (!cacheNamespaceSchema.safeParse(namespace).success) {
+    throw new Error(
+      "Refusing test cleanup: cache namespace contains unsafe characters",
     );
   }
   if (!namespace.endsWith("-test")) {

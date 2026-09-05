@@ -11,6 +11,8 @@ export interface ApiErrorBody {
   details?: string[];
   timestamp: string;
   path: string;
+  /** Absent when no server response was received. */
+  requestId?: string;
 }
 
 /** HTTP and network error, compatible with generated error-envelope types. */
@@ -42,21 +44,22 @@ export async function fetcher<T>(
   const response = await request(url, options);
 
   // Use null for empty bodies; React Query rejects undefined results.
-  const payload: unknown =
-    response.status === 204 || response.headers.get("content-length") === "0"
-      ? null
-      : await response.json().catch(() => NOT_JSON);
+  const empty =
+    response.status === 204 || response.headers.get("content-length") === "0";
+  const payload: unknown = empty
+    ? null
+    : await response.json().catch(() => NOT_JSON);
 
   if (!response.ok) {
     throw new ApiError(
       response.status,
-      errorBodyOf(payload, response.status, url),
+      errorBodyOf(payload, response.status, url, response),
       { retryAfterMs: retryAfterOf(response) },
     );
   }
 
   // Reject unexpected 2xx responses, such as a proxy login page.
-  if (payload !== null && !isEnvelope(payload)) {
+  if (!empty && !isEnvelope(payload)) {
     throw new ApiError(
       response.status,
       fallbackBody(
@@ -64,6 +67,7 @@ export async function fetcher<T>(
         `The api answered ${response.status} with something other than a ` +
           "response envelope - is the base url pointing at the api?",
         url,
+        response.headers.get("x-request-id"),
       ),
     );
   }
@@ -81,7 +85,7 @@ function isEnvelope(payload: unknown): payload is { data: unknown } {
 function retryAfterOf(response: Response): number | undefined {
   const header = response.headers.get("retry-after");
 
-  if (header === null) {
+  if (header === null || header.trim() === "") {
     return undefined;
   }
 
@@ -116,31 +120,45 @@ async function request(url: string, options: RequestInit): Promise<Response> {
   }
 }
 
-/**
- * Use runtime API_URL on the server, build-time NEXT_PUBLIC_API_URL in the browser.
- * Server requests require an absolute base URL.
- */
-function resolveUrl(url: string): string {
-  const isServer = typeof window === "undefined";
-  // `||`, not `??`: an unset compose variable or docker ARG arrives as "".
-  const base =
-    (isServer ? process.env.API_URL : undefined) ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    "";
+/** Require explicit HTTP(S) bases, optionally including a reverse-proxy path. */
+export function validateApiBaseUrl(
+  value: string | undefined,
+  variable: string,
+): string {
+  let parsed: URL;
 
-  if (isServer && base === "") {
-    throw new ApiError(
-      NETWORK_ERROR_STATUS,
-      fallbackBody(
-        NETWORK_ERROR_STATUS,
-        `Cannot request "${url}" from the server without an absolute base url. ` +
-          "Set API_URL to where the api answers from inside the network (in " +
-          "docker compose that is the service name, http://api:3001), or make " +
-          "this call from a client component.",
-        url,
-      ),
+  try {
+    parsed = new URL(value ?? "");
+  } catch {
+    throw new Error(`${variable} must be an absolute HTTP(S) API URL`);
+  }
+
+  if (
+    !["http:", "https:"].includes(parsed.protocol) ||
+    parsed.username ||
+    parsed.password ||
+    parsed.search ||
+    parsed.hash
+  ) {
+    throw new Error(
+      `${variable} must be an HTTP(S) API URL without credentials, query or fragment`,
     );
   }
+
+  return parsed.href.replace(/\/+$/, "");
+}
+
+/** Server requests may override the build-time browser API address. */
+function resolveUrl(url: string): string {
+  const isServer = typeof window === "undefined";
+  const publicBase = validateApiBaseUrl(
+    process.env.NEXT_PUBLIC_API_URL,
+    "NEXT_PUBLIC_API_URL",
+  );
+  const base =
+    isServer && process.env.API_URL
+      ? validateApiBaseUrl(process.env.API_URL, "API_URL")
+      : publicBase;
 
   return join(base, url);
 }
@@ -154,11 +172,21 @@ function errorBodyOf(
   payload: unknown,
   status: number,
   url: string,
+  response: Response,
 ): ApiErrorBody {
   // Proxy errors may lack an envelope; preserve their HTTP status.
+  const requestId = response.headers.get("x-request-id");
   return isErrorEnvelope(payload)
-    ? payload.error
-    : fallbackBody(status, `Request failed with status ${status}`, url);
+    ? {
+        ...payload.error,
+        ...(requestId ? { requestId } : {}),
+      }
+    : fallbackBody(
+        status,
+        `Request failed with status ${status}`,
+        url,
+        requestId,
+      );
 }
 
 /** Fallback for errors without a backend envelope. */
@@ -166,8 +194,15 @@ function fallbackBody(
   statusCode: number,
   message: string,
   path: string,
+  requestId?: string | null,
 ): ApiErrorBody {
-  return { statusCode, message, timestamp: new Date().toISOString(), path };
+  return {
+    statusCode,
+    message,
+    timestamp: new Date().toISOString(),
+    path,
+    ...(requestId ? { requestId } : {}),
+  };
 }
 
 function isErrorEnvelope(payload: unknown): payload is { error: ApiErrorBody } {
@@ -184,7 +219,17 @@ function isErrorEnvelope(payload: unknown): payload is { error: ApiErrorBody } {
   return (
     typeof error === "object" &&
     error !== null &&
+    "statusCode" in error &&
+    typeof error.statusCode === "number" &&
+    "timestamp" in error &&
+    typeof error.timestamp === "string" &&
+    "path" in error &&
+    typeof error.path === "string" &&
     "message" in error &&
-    typeof error.message === "string"
+    typeof error.message === "string" &&
+    (!("requestId" in error) || typeof error.requestId === "string") &&
+    (!("details" in error) ||
+      (Array.isArray(error.details) &&
+        error.details.every((detail) => typeof detail === "string")))
   );
 }

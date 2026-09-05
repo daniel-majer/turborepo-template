@@ -9,6 +9,7 @@ import {
 } from "pino";
 import type { Options } from "pino-http";
 
+import { API_PREFIX } from "../api-prefix.js";
 import { CacheModule } from "../cache/cache.module.js";
 import { AllExceptionsFilter } from "../common/all-exceptions.filter.js";
 import { TransformResponseInterceptor } from "../common/transform-response.interceptor.js";
@@ -39,7 +40,8 @@ import { HealthModule } from "../health/health.module.js";
           level: config.logLevel,
           autoLogging: {
             // Skip repetitive healthcheck access logs.
-            ignore: (request) => request.url?.startsWith("/health") ?? false,
+            ignore: (request) =>
+              request.url?.startsWith(`/${API_PREFIX}/health`) ?? false,
           },
           redact: [
             "req.headers.authorization",

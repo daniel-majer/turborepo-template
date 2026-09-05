@@ -9,6 +9,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
 } from "@nestjs/common";
 import {
   ApiNoContentResponse,
@@ -21,6 +22,8 @@ import { ApiDataResponse } from "../common/api-data-response.decorator.js";
 import { CreateUserDto } from "./dto/create-user.dto.js";
 import { UpdateUserDto } from "./dto/update-user.dto.js";
 import { UserDto } from "./dto/user.dto.js";
+import { UsersPageMetaDto } from "./dto/users-page-meta.dto.js";
+import { UsersQueryDto } from "./dto/users-query.dto.js";
 import { UsersService } from "./users.service.js";
 
 // swagger.setup.ts adds the shared error response to every operation.
@@ -37,10 +40,10 @@ export class UsersController {
   }
 
   @Get()
-  @ApiOperation({ summary: "List all users, ordered by id" })
-  @ApiDataResponse(UserDto, { isArray: true })
-  findAll(): Promise<UserDto[]> {
-    return this.usersService.findAll();
+  @ApiOperation({ summary: "List a page of users, ordered by id" })
+  @ApiDataResponse(UserDto, { isArray: true, meta: UsersPageMetaDto })
+  findAll(@Query() query: UsersQueryDto) {
+    return this.usersService.findAll(query);
   }
 
   @Get(":id")

@@ -7,8 +7,8 @@ FROM node:22-alpine AS node-base
 FROM node-base AS tooling
 COPY --from=oven/bun:1.3.14-alpine /usr/local/bin/bun /usr/local/bin/bun
 
-# Cache dependency installs separately from source changes.
-FROM tooling AS deps
+# Keep workspace manifests in a shared cacheable stage.
+FROM tooling AS manifests
 WORKDIR /app
 
 # TODO(template): add a COPY line for each new workspace.
@@ -16,32 +16,25 @@ COPY package.json bun.lock ./
 COPY apps/be/package.json apps/be/
 COPY apps/fe/package.json apps/fe/
 COPY packages/api-client/package.json packages/api-client/
+COPY packages/migrate/package.json packages/migrate/
 COPY packages/ts-config/package.json packages/ts-config/
 COPY packages/ui/package.json packages/ui/
 
 # Defer postinstalls until the Prisma schema is available.
+FROM manifests AS deps
 RUN --mount=type=cache,id=bun-install,target=/root/.bun/install/cache \
     bun install --frozen-lockfile --ignore-scripts --filter './apps/be'
 
 # Exclude devDependencies from the runtime image.
-FROM tooling AS prod-deps
-WORKDIR /app
-
-COPY package.json bun.lock ./
-COPY apps/be/package.json apps/be/
-COPY apps/fe/package.json apps/fe/
-COPY packages/api-client/package.json packages/api-client/
-COPY packages/ts-config/package.json packages/ts-config/
-COPY packages/ui/package.json packages/ui/
+FROM manifests AS prod-deps
 RUN --mount=type=cache,id=bun-install,target=/root/.bun/install/cache \
-    bun install --frozen-lockfile --production --ignore-scripts --filter './apps/be'
+    bun install --frozen-lockfile --production --omit peer --ignore-scripts --filter './apps/be'
 
-# Provide the schema before running Prisma postinstalls.
-COPY apps/be/prisma.config.ts apps/be/
-COPY apps/be/src/database apps/be/src/database
-
+# Install only the CLI dependencies used by the migration target.
+FROM manifests AS migrate-deps
 RUN --mount=type=cache,id=bun-install,target=/root/.bun/install/cache \
-    bun install --frozen-lockfile --production --filter './apps/be'
+    bun install --frozen-lockfile --production --omit peer --ignore-scripts --filter './packages/migrate' && \
+    ./packages/migrate/node_modules/.bin/prisma -v >/dev/null
 
 FROM deps AS build
 WORKDIR /app
@@ -53,6 +46,19 @@ WORKDIR /app/apps/be
 # Generate the gitignored Prisma client before compilation.
 RUN bun run db:generate && bun run build
 
+# Short-lived migration tooling; never included in the API runtime.
+FROM node-base AS migrate
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=migrate-deps /app/node_modules node_modules
+COPY --from=migrate-deps /app/packages/migrate/node_modules apps/be/node_modules
+COPY apps/be/package.json apps/be/prisma.config.ts apps/be/
+COPY apps/be/src/database/schema.prisma apps/be/src/database/
+COPY apps/be/src/database/migrations apps/be/src/database/migrations
+WORKDIR /app/apps/be
+USER node
+CMD ["./node_modules/.bin/prisma", "migrate", "deploy"]
+
 FROM node-base AS runtime
 WORKDIR /app
 
@@ -61,10 +67,7 @@ ENV NODE_ENV=production
 COPY --from=prod-deps /app/node_modules node_modules
 COPY --from=prod-deps /app/apps/be/node_modules apps/be/node_modules
 COPY --from=build /app/apps/be/dist apps/be/dist
-# Include Prisma configuration and migrations for the migrate service.
-COPY apps/be/package.json apps/be/prisma.config.ts apps/be/
-COPY apps/be/src/database/schema.prisma apps/be/src/database/
-COPY apps/be/src/database/migrations apps/be/src/database/migrations
+COPY apps/be/package.json apps/be/
 
 WORKDIR /app/apps/be
 USER node

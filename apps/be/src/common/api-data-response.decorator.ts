@@ -20,7 +20,7 @@ interface ApiDataResponseOptions {
   /** Allow data: null, including handlers that return undefined. */
   nullable?: boolean;
   /** Include metadata returned with envelope(data, meta). */
-  meta?: boolean;
+  meta?: boolean | Type<unknown>;
 }
 
 interface Pending {
@@ -44,6 +44,8 @@ export function ApiDataResponse(
   options: ApiDataResponseOptions = {},
 ) {
   const isModel = typeof content === "function";
+  const metaModel =
+    typeof options.meta === "function" ? options.meta : undefined;
   const item = isModel ? { $ref: getSchemaPath(content) } : content;
   const payload = options.isArray
     ? { type: "array" as const, items: item }
@@ -52,6 +54,7 @@ export function ApiDataResponse(
   return applyDecorators(
     // Register models referenced only by this custom schema.
     ...(isModel ? [ApiExtraModels(content)] : []),
+    ...(metaModel ? [ApiExtraModels(metaModel)] : []),
     (
       target: object,
       propertyKey?: string | symbol,
@@ -70,12 +73,17 @@ export function applyDataResponses(): void {
       status: options.status ?? successStatusOf(descriptor?.value),
       schema: {
         type: "object",
-        required: ["data"],
+        required:
+          typeof options.meta === "function" ? ["data", "meta"] : ["data"],
         properties: {
           data: options.nullable ? asNullable(payload) : payload,
-          // Metadata shape is route-specific.
           ...(options.meta
-            ? { meta: { type: "object", additionalProperties: true } }
+            ? {
+                meta:
+                  typeof options.meta === "function"
+                    ? { $ref: getSchemaPath(options.meta) }
+                    : { type: "object", additionalProperties: true },
+              }
             : {}),
         },
       },

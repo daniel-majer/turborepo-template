@@ -23,8 +23,13 @@ async function intercept(
 }
 
 // Nest stores route metadata on the handler function.
-const rawHandler = () => "raw bytes";
-RawResponse()(rawHandler);
+class RawHandler {
+  @RawResponse()
+  handle(this: void) {
+    return "raw bytes";
+  }
+}
+const rawHandler = RawHandler.prototype.handle;
 
 describe("TransformResponseInterceptor", () => {
   it("wraps a plain value", async () => {

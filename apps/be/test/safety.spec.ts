@@ -92,4 +92,18 @@ describe("test cleanup target safety", () => {
       ),
     ).toThrow(/must end with "-test"/);
   });
+
+  it.each([
+    "app*-test",
+    "app?-test",
+    "app[ab]-test",
+    "app\\-test",
+    "app::other-test",
+    "app test-test",
+  ])("rejects unsafe cache namespace %s before cleanup", (namespace) => {
+    const environment = { ...testFileEnvironment, CACHE_NAMESPACE: namespace };
+    expect(() =>
+      assertSafeTestTargets({ ...environment, NODE_ENV: "test" }, environment),
+    ).toThrow(/unsafe characters/);
+  });
 });

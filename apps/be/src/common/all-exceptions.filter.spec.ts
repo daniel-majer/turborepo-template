@@ -17,7 +17,7 @@ function catchException(exception: unknown) {
   const host = createMock<ArgumentsHost>({
     switchToHttp: () => ({
       getResponse: () => ({ status }),
-      getRequest: () => ({ url: "/users/42" }),
+      getRequest: () => ({ url: "/users/42", id: "test-request-id" }),
     }),
   });
 
@@ -52,6 +52,7 @@ describe("AllExceptionsFilter", () => {
         message: "User not found",
         timestamp: expect.any(String),
         path: "/users/42",
+        requestId: "test-request-id",
       },
     });
   });

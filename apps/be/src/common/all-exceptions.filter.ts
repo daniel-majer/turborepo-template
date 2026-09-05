@@ -15,6 +15,7 @@ export interface ApiError {
   details?: string[];
   timestamp: string;
   path: string;
+  requestId: string;
 }
 
 export interface ErrorEnvelope {
@@ -53,6 +54,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         ...describeException(exception),
         timestamp: new Date().toISOString(),
         path: request.url,
+        requestId: request.id,
       },
     };
 

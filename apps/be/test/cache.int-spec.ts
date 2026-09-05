@@ -6,6 +6,9 @@ import { Test } from "@nestjs/testing";
 
 import { AppModule } from "../src/app.module.js";
 import { CacheService } from "../src/cache/cache.service.js";
+import { cacheNamespaceSchema } from "../src/config/env.js";
+import { redisConfig } from "../src/config/index.js";
+import { assertSafeTestTargets } from "./safety.js";
 import { useTestApp } from "./setup.js";
 
 describe("CacheService (integration)", () => {
@@ -50,6 +53,29 @@ describe("CacheService (integration)", () => {
     await expect(t.cache.get("b")).resolves.toBeUndefined();
   });
 
+  it("clear preserves a neighboring namespace on the same Redis server", async () => {
+    assertSafeTestTargets();
+    const config = t.app.get<ConfigType<typeof redisConfig>>(redisConfig.KEY);
+    const namespace = cacheNamespaceSchema.parse(
+      `${config.namespace}-sibling-test`,
+    );
+    const sibling = createKeyv(config.url, { namespace, throwOnErrors: true });
+    const key = randomUUID();
+    try {
+      await sibling.set(key, "neighbor", 60_000);
+      await t.cache.set(key, "own", 60_000);
+      await t.cache.clear();
+      await expect(t.cache.get(key)).resolves.toBeUndefined();
+      await expect(sibling.get(key)).resolves.toBe("neighbor");
+    } finally {
+      try {
+        await sibling.delete(key);
+      } finally {
+        await sibling.disconnect();
+      }
+    }
+  });
+
   it("wrap calls the factory only on a miss", async () => {
     const factory = vi.fn(async () => "computed");
 
@@ -80,3 +106,7 @@ describe("CacheService (integration)", () => {
     }
   });
 });
+import { randomUUID } from "node:crypto";
+
+import { createKeyv } from "@keyv/redis";
+import type { ConfigType } from "@nestjs/config";

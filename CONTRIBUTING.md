@@ -23,6 +23,7 @@ the backend's `.env.test` contain only local, disposable values.
 
 ```sh
 bun run api:sync          # when changing controllers, DTOs or API metadata
+bun run audit
 bun x turbo run quality check-types
 bun run build
 bun run boundaries
@@ -36,7 +37,7 @@ For a Docker, runtime, server-rendering or deployment change, also run:
 bun run verify:images
 ```
 
-The last command builds both production images and exercises their isolated
+The last command builds all three production images and exercises their isolated
 Compose stack, API CRUD, server-rendered HTML and dependency outages. It
 removes only its own containers, volumes and image tags, including after a
 failure, and prints container logs to help diagnose a failed run.

@@ -2,9 +2,9 @@
 # TODO(template): choose a unique project name to isolate volumes.
 name: turborepo-template-prod
 
-# Use one explicit repository prefix and tag for both apps.
+# Pin all release images to the same immutable run tag.
 x-images:
-  be: &be-image ${IMAGE_REPO:?set IMAGE_REPO in .env, e.g. ghcr.io/owner/repository}/be:${IMAGE_TAG:-latest}
+  be: &be-image ${IMAGE_REPO:?set IMAGE_REPO in .env, e.g. ghcr.io/owner/repository}/be:${IMAGE_TAG:?set IMAGE_TAG from the release summary}
 
 # Limit logs to 30 MB per service.
 x-logging: &logging
@@ -105,11 +105,10 @@ services:
   # Run migrations as the database owner before starting the restricted API role.
   migrate:
     <<: *app
-    image: *be-image
+    image: ${IMAGE_REPO:?set IMAGE_REPO in .env}/migrate:${IMAGE_TAG:?set IMAGE_TAG from the release summary}
     restart: "no"
     tmpfs:
       - /tmp
-    command: ["./node_modules/.bin/prisma", "migrate", "deploy"]
     environment:
       # Passwords go into URLs verbatim; generate URL-safe hex values.
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-app}
@@ -125,8 +124,6 @@ services:
       migrate:
         condition: service_completed_successfully
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     tmpfs:
       - /tmp
@@ -152,7 +149,7 @@ services:
           "wget",
           "--quiet",
           "--spider",
-          "http://127.0.0.1:3001/health/ready",
+          "http://127.0.0.1:3001/api/health/ready",
         ]
       interval: 30s
       timeout: 5s
@@ -161,7 +158,7 @@ services:
 
   web:
     <<: *app
-    image: ${IMAGE_REPO:?set IMAGE_REPO in .env}/fe:${IMAGE_TAG:-latest}
+    image: ${IMAGE_REPO:?set IMAGE_REPO in .env}/fe:${IMAGE_TAG:?set IMAGE_TAG from the release summary}
     tmpfs:
       - /tmp
       # Writable Next image/data cache.
@@ -169,6 +166,7 @@ services:
     environment:
       NODE_ENV: production
       # Set NEXT_PUBLIC_* in release build args, not at runtime.
+      # The private Compose address; generated paths already carry /api.
       API_URL: http://api:3001
       PORT: 3000
     ports:

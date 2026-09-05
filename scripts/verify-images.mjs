@@ -10,6 +10,8 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const project = `template-verify-${randomBytes(6).toString("hex")}`;
 const abort = new AbortController();
 const reservations = [];
+const uuid =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 let cleaning = false;
 let stackCreated = false;
 const builtImages = [];
@@ -107,7 +109,8 @@ async function eventually(check) {
 
 async function main() {
   const [apiPort, webPort] = await Promise.all([reservePort(), reservePort()]);
-  const api = `http://127.0.0.1:${apiPort}`;
+  const apiOrigin = `http://127.0.0.1:${apiPort}`;
+  const api = `${apiOrigin}/api`;
   const web = `http://127.0.0.1:${webPort}`;
   environment = {
     ...process.env,
@@ -126,15 +129,23 @@ async function main() {
     WEB_PORT: String(webPort),
   };
 
+  const images = [
+    { app: "be", file: "apps/be/Dockerfile", target: "runtime" },
+    { app: "migrate", file: "apps/be/Dockerfile", target: "migrate" },
+    { app: "fe", file: "apps/fe/Dockerfile", target: "runtime" },
+  ];
+
   console.log(`Building production images (${project})`);
-  for (const app of ["be", "fe"]) {
+  for (const { app, file, target } of images) {
     const image = `${project}/${app}:latest`;
     // Build sequentially to limit peak memory.
     // oxlint-disable-next-line no-await-in-loop
     await run("docker", [
       "build",
       "--file",
-      `apps/${app}/Dockerfile`,
+      file,
+      "--target",
+      target,
       "--tag",
       image,
       ...(app === "fe"
@@ -142,13 +153,54 @@ async function main() {
             "--build-arg",
             `NEXT_PUBLIC_APP_URL=${web}`,
             "--build-arg",
-            `NEXT_PUBLIC_API_URL=${api}`,
+            `NEXT_PUBLIC_API_URL=${apiOrigin}`,
           ]
         : []),
       ".",
     ]);
     builtImages.push(image);
   }
+
+  const runtimePackages = await run(
+    "docker",
+    [
+      "run",
+      "--rm",
+      "--network",
+      "none",
+      "--entrypoint",
+      "node",
+      `${project}/be:latest`,
+      "-e",
+      [
+        "const {existsSync,readdirSync}=require('node:fs')",
+        "const names=readdirSync('/app/node_modules/.bun')",
+        "const forbidden=['prisma@','mysql2@','lodash@','deepmerge-ts@','valibot@']",
+        "const found=forbidden.filter((prefix)=>names.some((name)=>name.startsWith(prefix)))",
+        "if(existsSync('/app/apps/be/node_modules/.bin/prisma')||found.length)throw new Error(`CLI packages leaked into runtime: ${found.join(', ')}`)",
+        "process.stdout.write('clean')",
+      ].join(";"),
+    ],
+    { capture: true },
+  );
+  assert.equal(runtimePackages, "clean");
+  const migrateCli = await run(
+    "docker",
+    [
+      "run",
+      "--rm",
+      "--network",
+      "none",
+      "--entrypoint",
+      "node",
+      `${project}/migrate:latest`,
+      "-e",
+      "const {existsSync}=require('node:fs');if(!existsSync('/app/apps/be/node_modules/.bin/prisma'))process.exit(1);process.stdout.write('present')",
+    ],
+    { capture: true },
+  );
+  assert.equal(migrateCli, "present");
+  console.log("PASS: migration tooling is isolated from the API runtime");
 
   await releasePorts();
   stackCreated = true;
@@ -174,7 +226,9 @@ async function main() {
   const error = await notFound.json();
   assert.equal(error.data, null);
   assert.equal(error.error.statusCode, 404);
-  assert.equal(error.error.path, "/missing");
+  assert.equal(error.error.path, "/api/missing");
+  assert.match(error.error.requestId, uuid);
+  assert.equal(notFound.headers.get("x-request-id"), error.error.requestId);
   await request(`${api}/docs-json`, 404);
 
   const preflight = await request(`${api}/users/1`, 204, {
@@ -204,40 +258,65 @@ async function main() {
   });
   assert.ok(Array.isArray((await invalid.json()).error.details));
 
-  const email = `image-${randomBytes(6).toString("hex")}@example.com`;
-  const created = await request(`${api}/users`, 201, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
-  });
-  const user = (await created.json()).data;
-  assert.ok(Number.isInteger(user.id));
-  assert.equal(user.email, email);
-  const users = (await (await request(`${api}/users`)).json()).data;
-  assert.ok(Array.isArray(users) && users.some((item) => item.id === user.id));
-  const html = await (await request(`${web}/users`)).text();
-  assert.ok(
-    html.includes(email),
-    "SSR must contain the actual database row, not just a page heading",
+  const emails = [0, 1].map(
+    (index) => `image-${index}-${randomBytes(6).toString("hex")}@example.com`,
   );
-  const deleted = await request(`${api}/users/${user.id}`, 204, {
-    method: "DELETE",
+  const users = [];
+  for (const email of emails) {
+    // oxlint-disable-next-line no-await-in-loop
+    const created = await request(`${api}/users`, 201, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    // oxlint-disable-next-line no-await-in-loop
+    const user = (await created.json()).data;
+    assert.ok(Number.isInteger(user.id));
+    assert.equal(user.email, email);
+    users.push(user);
+  }
+  const firstPage = await (await request(`${api}/users?take=1`)).json();
+  assert.equal(firstPage.data.length, 1);
+  assert.equal(firstPage.meta.hasNextPage, true);
+  assert.equal(firstPage.meta.nextCursor, firstPage.data[0].id);
+  const secondPage = await (
+    await request(`${api}/users?take=1&cursor=${firstPage.meta.nextCursor}`)
+  ).json();
+  assert.equal(secondPage.data.length, 1);
+  assert.notEqual(secondPage.data[0].id, firstPage.data[0].id);
+  assert.deepEqual(secondPage.meta, {
+    nextCursor: null,
+    hasNextPage: false,
   });
-  assert.equal(await deleted.text(), "");
-  await request(`${api}/users/${user.id}`, 404);
+  const html = await (await request(`${web}/users`)).text();
+  for (const { email, id } of users) {
+    assert.ok(
+      html.includes(email),
+      "SSR must contain database rows, not just a page heading",
+    );
+    // oxlint-disable-next-line no-await-in-loop
+    const deleted = await request(`${api}/users/${id}`, 204, {
+      method: "DELETE",
+    });
+    // oxlint-disable-next-line no-await-in-loop
+    assert.equal(await deleted.text(), "");
+    // oxlint-disable-next-line no-await-in-loop
+    await request(`${api}/users/${id}`, 404);
+  }
   console.log(
-    "PASS: migrations, non-root apps, health, headers, CORS, validation, CRUD and SSR",
+    "PASS: migrations, non-root apps, health, request IDs, pagination, CRUD and SSR",
   );
 
-  await compose(["stop", "redis"]);
-  // Verify cold-start behavior without Redis.
-  await compose(["restart", "api"]);
+  await compose(["stop", "api", "redis"]);
+  await compose(["rm", "--force", "api"]);
+  // Use Compose startup so a Redis dependency regression cannot hide here.
+  await compose(["up", "--detach", "api"]);
   await eventually(async () => {
     assert.deepEqual(await (await request(`${api}/health/ready`)).json(), {
       data: { status: "degraded", checks: { database: "up", cache: "down" } },
     });
   });
-  assert.deepEqual(await (await request(`${api}/`)).json(), {
+  assert.deepEqual(await (await request(api)).json(), {
     data: "Hello World!",
   });
   console.log(

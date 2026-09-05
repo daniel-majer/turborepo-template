@@ -51,6 +51,20 @@ bun run api:spec     # rebuild openapi.json from the controllers
 
 ## Architecture notes
 
+### Global route prefix (`src/api-prefix.ts`)
+
+Every controller route is served under **`/api`**, Swagger included. It is what
+lets the api and the frontend share one origin: a reverse proxy forwards
+`/api/*` here unchanged and everything else to Next, and a page route such as
+the frontend's `/users` cannot shadow the endpoint of the same name.
+
+The prefix is applied twice, and the two must agree: `configureApp()` sets it
+for the server and the e2e suite, and `scripts/generate-openapi.ts` sets it for
+the committed spec. `SwaggerModule` registers on the adapter directly and
+ignores the global prefix, so `swagger.setup.ts` spells the path out. Changing
+the prefix means regenerating the spec and the client (`bun run api:sync`);
+the e2e drift check fails if only one side moved.
+
 ### Fastify instead of Express
 
 `main.ts` bootstraps the app with `FastifyAdapter`. Fastify listens on `0.0.0.0`
@@ -86,7 +100,8 @@ bun run api:spec     # rebuild openapi.json from the controllers
   with credentials - and `methods` is spelled out in `app.setup.ts` because
   `@fastify/cors` otherwise allows only `GET`, `HEAD` and `POST`.
 - `CACHE_NAMESPACE` prefixes every cache key and bounds what `clear()` wipes.
-  No default: two projects on one Redis must not share it.
+  It accepts only letters, digits, `_` and `-`; Redis glob characters and the
+  store's separator are rejected. No default: projects must not share it.
 - `LOG_LEVEL` overrides the per-environment default (`debug` in development,
   `info` in production, `silent` in tests) without a redeploy.
 - Adding a variable: declare it in the zod schema (`src/config/env.ts`),
@@ -107,11 +122,12 @@ bun run api:spec     # rebuild openapi.json from the controllers
   global — inject it and use `this.db.user.findMany()`.
 - Changing the schema: edit `schema.prisma`, then `bun run db:migrate` and
   `bun run db:generate`. Prisma 7 does not generate the client during migration.
-- `prisma.config.ts` deliberately imports nothing from `src/`: it also runs
-  inside the production image, where only `dist/`, the schema and the
-  migrations exist (the `migrate` service in `docker-compose.prod.yml`). It
-  mirrors `src/config/env-file.ts` - keep the two in sync. `prisma` and `dotenv`
-  are runtime dependencies for the same reason.
+- `prisma.config.ts` deliberately imports nothing from `src/`. The Dockerfile's
+  `migrate` target contains the CLI, config, schema and migrations; the API
+  runtime contains only generated client code and production dependencies.
+  `apps/be` keeps `prisma` as a dev dependency, while `packages/migrate` is the
+  narrow production manifest for that image. Keep the config's env loading in
+  sync with `src/config/env-file.ts`.
 - `src/database/seed.ts` is registered as the seed command. Run `bun run db:seed`
   explicitly; Prisma 7 does not seed automatically during migrations or resets.
   Upserts make repeated runs safe.
@@ -139,7 +155,7 @@ bun run api:spec     # rebuild openapi.json from the controllers
   timeout and no offline queue - a command against an unreachable Redis fails
   at once instead of waiting for a reconnect that may never come. `wrap()` then
   falls back to a plain `fn()` call (a read error is a miss, a failed write is
-  logged), `/health/ready` reports `degraded`, and the api keeps serving.
+  logged), `/api/health/ready` reports `degraded`, and the api keeps serving.
   `set`, `del` and `clear` do propagate the error, so an invalidation that
   could not reach Redis is not mistaken for a successful one.
 - Nest's `CacheInterceptor` is **not** registered globally on purpose — it keys
@@ -158,7 +174,7 @@ bun run api:spec     # rebuild openapi.json from the controllers
   `authorization`, `cookie` and `set-cookie` headers redacted, the query string
   stripped from the url (it can carry tokens), and the response headers reduced
   to `content-length` (helmet adds ~400 identical bytes otherwise).
-- Requests to `/health/*` are not logged: healthchecks poll every few seconds
+- Requests to `/api/health/*` are not logged: healthchecks poll every few seconds
   and say nothing useful.
 - Inject a scoped logger with `@InjectPinoLogger(MyService.name) logger: PinoLogger`.
 
@@ -168,14 +184,15 @@ Every response is an envelope, success and failure alike:
 
 ```jsonc
 { "data": { "id": 1 } }                       // success
-{ "data": [ ... ], "meta": { "total": 42 } }  // success with metadata
+{ "data": [ ... ], "meta": { "nextCursor": 20, "hasNextPage": true } }
 { "data": null, "error": { "statusCode": 404, "message": "User 42 not found",
-                           "timestamp": "...", "path": "/users/42" } }
+                           "timestamp": "...", "path": "/api/users/42",
+                           "requestId": "..." } }
 ```
 
 - **`TransformResponseInterceptor`** (`APP_INTERCEPTOR`) wraps every handler
   result as `{ data }`. To send metadata beside the payload, return
-  `envelope(users, { total })` — a hand-written `{ data: ... }` is deliberately
+  `envelope(users, { nextCursor, hasNextPage })` — a hand-written `{ data: ... }` is deliberately
   not recognised (it would be indistinguishable from a row with a `data`
   column) and ends up nested inside a second envelope.
 - A handler that returns `null` or nothing answers `{ data: null }`; document
@@ -190,10 +207,10 @@ Every response is an envelope, success and failure alike:
 
 ### Health (`src/health/`)
 
-- **`GET /health/live`** - is the process alive? Wire restart policies to this
+- **`GET /api/health/live`** - is the process alive? Wire restart policies to this
   one; restarting a container because its database went down turns one outage
   into a crash loop.
-- **`GET /health/ready`** - can it serve traffic? Checks Postgres with
+- **`GET /api/health/ready`** - can it serve traffic? Checks Postgres with
   `SELECT 1` and Redis with a write, each under a 2 s timeout. Wire load
   balancers, container healthchecks and `docker compose up --wait` to this one.
   An unreachable database answers `503`; an unreachable Redis leaves it `200`
@@ -213,8 +230,8 @@ injection.
   converts payloads to DTO instances.
 - **`AllExceptionsFilter`** (`APP_FILTER`, `src/common/all-exceptions.filter.ts`) —
   turns every failure into `{ data: null, error }`, where `error` carries
-  `statusCode`, `message`, `timestamp`, `path` and, on a validation error,
-  `details` with one entry per failed constraint. `HttpException`s keep their
+  `statusCode`, `message`, `timestamp`, `path`, the response/log `requestId`
+  and, on validation errors, `details`. `HttpException`s keep their
   status and message; unknown errors are logged with a stack trace and returned
   as a generic 500 (no internals leak to clients).
 
@@ -228,7 +245,7 @@ injection.
   `test/swagger-plugin.ts` applies the same DTO transformer under Vitest; it
   needs the TypeScript 6 compiler API, also declared at the workspace root so
   Bun's fallback resolution does not select the frontend's TypeScript 7.
-- Swagger UI at **`/docs`** and the raw spec at **`/docs-json`**, outside
+- Swagger UI at **`/api/docs`** and the raw spec at **`/api/docs-json`**, outside
   production. `bun run api:spec` writes the same document to `openapi.json`,
   which `packages/api-client` generates the frontend's client from.
 - The generator runs against `dist/`, and with `preview: true` - controllers and
@@ -238,14 +255,13 @@ injection.
   `TransformResponseInterceptor` really sends it, wrapped in `{ data }`. The
   status comes from the verb (`@Post` is 201, the rest 200) or from `@HttpCode`;
   pass `{ isArray: true }` for a list, `{ nullable: true }` for a handler that
-  may return nothing, `{ meta: true }` for a route that answers with
-  `envelope(data, meta)`.
+  may return nothing, or `{ meta: MetaDto }` for typed envelope metadata.
 - **A route without it fails `api:spec`** - and the app's boot outside
   production, since Swagger UI builds the same document. A route that describes
   no payload would land in the spec as a status with no content, and orval would
-  generate an untyped hook from it. Only `204`/`205` responses are exempt. This
-  applies to test-only controllers too: a probe controller in an e2e suite
-  needs the decorator like any other route.
+  generate an untyped hook from it. Explicit `204`, `205` and `304` responses
+  are bodyless; raw 3xx responses must document a `Location` header. This also
+  applies to test-only controllers.
 - Errors need no decorator - `swagger.setup.ts` attaches the error envelope as
   the `default` response of every operation.
 - `operationIdFactory` names each operation `<controller><Method>`, so
@@ -294,12 +310,12 @@ injection.
   as locally) as separate jobs on pull requests, and as the gate of every
   release. It also regenerates `openapi.json` and fails if the committed file
   is behind the controllers.
-- A separate production smoke job builds both images, migrates an isolated
+- A separate production smoke job builds all three images, migrates an isolated
   production Compose stack and runs API CRUD, SSR and dependency-outage probes.
 - `release.yml` builds `apps/be/Dockerfile` from the repository root (the app
-  depends on workspace packages), pushes it to ghcr.io and pokes a deploy hook.
-  The image runs `node dist/main.js` as a non-root user and carries the schema
-  and migrations, so the same image runs `prisma migrate deploy` as the
-  one-shot `migrate` service in `docker-compose.prod.yml` before the api starts.
+  depends on workspace packages), pushes separate runtime and migration targets
+  to ghcr.io and pokes a deploy hook. The API runs `node dist/main.js` as a
+  non-root user; the one-shot migration image runs `prisma migrate deploy`
+  before it starts.
   See "Deployment" in the root README, and `bun run verify:images` to build and
   probe the image locally.

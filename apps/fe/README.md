@@ -57,16 +57,18 @@ self-contained server into `.next/standalone` with only the `node_modules` it
 reaches, and that is what `Dockerfile` ships (`node apps/fe/server.js`, as a
 non-root user, read-only apart from `.next/cache`).
 
-A build has no real values for `src/env.ts`, so CI and the image build set
-`SKIP_ENV_VALIDATION=true`; the server validates again when it starts, in
-`src/instrumentation.ts`. `NEXT_PUBLIC_*` variables are compiled into the
-bundle, so in production they are build args of `release.yml` (the
-`NEXT_PUBLIC_APP_URL` and `NEXT_PUBLIC_API_URL` repository variables), not
-environment variables of the running container. Leave `NEXT_PUBLIC_API_URL`
-unset when one reverse proxy serves both apps under a single origin - the
-generated client then sends relative requests - and set `API_URL` on the
-container for the server side, where a relative url has nothing to resolve
-against.
+CI supplies placeholder public URLs and skips validation of unavailable
+server-only values; the server validates again in `src/instrumentation.ts`.
+`NEXT_PUBLIC_*` values are compiled into the bundle, so production passes them
+as `release.yml` build args, not container runtime variables.
+
+`NEXT_PUBLIC_API_URL` is always required. For the included routing, set it to
+the API origin: generated requests already carry `/api`. A shared-origin proxy
+can forward `/api/*` to the backend unchanged while `/users` stays a frontend
+page. `API_URL=http://api:3001` lets server-side calls use Compose networking.
+
+Vitest covers env validation, the API transport and the users panel's form,
+mutations and cursor navigation. These component tests run without a browser.
 
 ## Production image checks
 
@@ -76,10 +78,10 @@ From the repository root:
 bun run verify:images
 ```
 
-This builds both production images and starts an isolated Compose stack. The
-checks exercise API CRUD and confirm that `/users` returns server-rendered HTML
-containing a real database row. The runner prints container logs on failure and
-removes its disposable stack afterwards.
+This builds the API, migration and frontend images and starts an isolated
+Compose stack. The checks exercise API CRUD, cursor pagination and confirm that
+`/users` contains server-rendered database rows. The runner prints container
+logs on failure and removes its disposable stack afterwards.
 
 These HTTP checks do not execute client-side JavaScript or test hydration and
 browser interactions. The template does not prescribe a browser-testing tool;

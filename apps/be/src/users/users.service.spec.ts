@@ -4,6 +4,7 @@ import { Test } from "@nestjs/testing";
 
 import { DatabaseService } from "../database/database.service.js";
 import { Prisma } from "../database/generated/client.js";
+import { UsersQueryDto } from "./dto/users-query.dto.js";
 import { UsersService } from "./users.service.js";
 
 const ada = {
@@ -66,9 +67,46 @@ describe("UsersService", () => {
     it("returns users in a stable order", async () => {
       db.user.findMany.mockResolvedValue([ada]);
 
-      await expect(service.findAll()).resolves.toEqual([ada]);
+      await expect(service.findAll(new UsersQueryDto())).resolves.toMatchObject(
+        {
+          data: [ada],
+          meta: { nextCursor: null, hasNextPage: false },
+        },
+      );
       expect(db.user.findMany.mock.calls).toEqual([
-        [{ orderBy: { id: "asc" } }],
+        [{ orderBy: { id: "asc" }, take: 21 }],
+      ]);
+    });
+
+    it("uses one lookahead row and excludes it from the page", async () => {
+      db.user.findMany.mockResolvedValue([ada, { ...ada, id: 2 }]);
+
+      await expect(service.findAll({ take: 1 })).resolves.toMatchObject({
+        data: [ada],
+        meta: { nextCursor: 1, hasNextPage: true },
+      });
+      expect(db.user.findMany.mock.calls).toEqual([
+        [{ orderBy: { id: "asc" }, take: 2 }],
+      ]);
+    });
+
+    it("continues after an id without requiring the cursor row to exist", async () => {
+      db.user.findMany.mockResolvedValue([{ ...ada, id: 4 }]);
+
+      await expect(
+        service.findAll({ take: 20, cursor: 3 }),
+      ).resolves.toMatchObject({
+        data: [{ ...ada, id: 4 }],
+        meta: { nextCursor: null, hasNextPage: false },
+      });
+      expect(db.user.findMany.mock.calls).toEqual([
+        [
+          {
+            where: { id: { gt: 3 } },
+            orderBy: { id: "asc" },
+            take: 21,
+          },
+        ],
       ]);
     });
   });

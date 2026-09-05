@@ -42,31 +42,43 @@ describe("TransformResponseInterceptor (e2e)", () => {
   const t = useTestApp({ controllers: [ShapesController] });
 
   it("wraps a plain value in a data envelope", async () => {
-    const res = await t.app.inject({ method: "GET", url: "/shapes/object" });
+    const res = await t.app.inject({
+      method: "GET",
+      url: "/api/shapes/object",
+    });
 
     expect(res.json()).toEqual({ data: { id: 1, name: "Anna" } });
   });
 
   it("returns data: null when the handler returns nothing", async () => {
-    const res = await t.app.inject({ method: "GET", url: "/shapes/nothing" });
+    const res = await t.app.inject({
+      method: "GET",
+      url: "/api/shapes/nothing",
+    });
 
     expect(res.json()).toEqual({ data: null });
   });
 
   it("preserves falsy values instead of swallowing them", async () => {
-    const res = await t.app.inject({ method: "GET", url: "/shapes/false" });
+    const res = await t.app.inject({ method: "GET", url: "/api/shapes/false" });
 
     expect(res.json()).toEqual({ data: false });
   });
 
   it("passes an envelope() response through unchanged", async () => {
-    const res = await t.app.inject({ method: "GET", url: "/shapes/paginated" });
+    const res = await t.app.inject({
+      method: "GET",
+      url: "/api/shapes/paginated",
+    });
 
     expect(res.json()).toEqual({ data: [1, 2, 3], meta: { pages: 10 } });
   });
 
   it("wraps a value that only looks like an envelope", async () => {
-    const res = await t.app.inject({ method: "GET", url: "/shapes/lookalike" });
+    const res = await t.app.inject({
+      method: "GET",
+      url: "/api/shapes/lookalike",
+    });
 
     expect(res.json()).toEqual({
       data: { data: "column", meta: "column" },
@@ -74,7 +86,10 @@ describe("TransformResponseInterceptor (e2e)", () => {
   });
 
   it("leaves the exception filter's envelope alone", async () => {
-    const res = await t.app.inject({ method: "GET", url: "/does-not-exist" });
+    const res = await t.app.inject({
+      method: "GET",
+      url: "/api/does-not-exist",
+    });
     const body = res.json();
 
     expect(res.statusCode).toBe(404);

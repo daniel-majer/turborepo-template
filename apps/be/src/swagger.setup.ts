@@ -6,8 +6,10 @@ import {
   SwaggerModule,
 } from "@nestjs/swagger";
 
+import { API_PREFIX } from "./api-prefix.js";
 import { applyDataResponses } from "./common/api-data-response.decorator.js";
 import { ErrorEnvelopeDto } from "./common/error-envelope.dto.js";
+import { RAW_RESPONSE_EXTENSION } from "./common/raw-response.decorator.js";
 
 /** Build the same contract for Swagger UI and the committed OpenAPI spec. */
 export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
@@ -33,10 +35,10 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
   );
 }
 
-/** Serves Swagger UI at /docs and the raw spec at /docs-json. */
+/** Serve Swagger below the application prefix. */
 export function setupSwagger(app: INestApplication) {
-  SwaggerModule.setup("docs", app, buildOpenApiDocument(app), {
-    jsonDocumentUrl: "docs-json",
+  SwaggerModule.setup(`${API_PREFIX}/docs`, app, buildOpenApiDocument(app), {
+    jsonDocumentUrl: `${API_PREFIX}/docs-json`,
   });
 }
 
@@ -49,7 +51,7 @@ function operationIdFactory(controllerKey: string, methodKey: string): string {
 }
 
 // Responses that have no body by definition.
-const EMPTY_BODY_STATUSES = new Set(["204", "205"]);
+const EMPTY_BODY_STATUSES = new Set(["204", "205", "304"]);
 
 /** Document the shared error envelope for every operation. */
 function withDefaultErrorResponse(document: OpenAPIObject): OpenAPIObject {
@@ -68,13 +70,17 @@ function assertEveryOperationDescribesItsPayload(
 
   for (const { label, operation } of operationsOf(document)) {
     const success = Object.entries(operation.responses).filter(([status]) =>
-      status.startsWith("2"),
+      /^[23]/.test(status),
     );
     const complete =
       success.length > 0 &&
       success.every(
         ([status, response]) =>
-          EMPTY_BODY_STATUSES.has(status) || describesContent(response),
+          EMPTY_BODY_STATUSES.has(status) ||
+          (status.startsWith("2") && describesContent(response)) ||
+          (status.startsWith("3") &&
+            operation[RAW_RESPONSE_EXTENSION] === true &&
+            describesLocation(response)),
       );
 
     if (!complete) {
@@ -85,7 +91,7 @@ function assertEveryOperationDescribesItsPayload(
   if (undescribed.length > 0) {
     throw new Error(
       `These routes describe no response payload: ${undescribed.join(", ")}. ` +
-        "Every handler needs @ApiDataResponse with the shape it returns.",
+        "Use @ApiDataResponse, or document raw redirects and bodyless responses explicitly.",
     );
   }
 
@@ -93,9 +99,29 @@ function assertEveryOperationDescribesItsPayload(
 }
 
 function describesContent(response: unknown): boolean {
+  if (!isObject(response)) return false;
+  if ("$ref" in response) return true;
+  const content = response.content;
+  if (!isObject(content)) return false;
+  const mediaTypes = Object.values(content);
   return (
-    typeof response === "object" && response !== null && "content" in response
+    mediaTypes.length > 0 &&
+    mediaTypes.every((media) => isObject(media) && isObject(media.schema))
   );
+}
+
+function describesLocation(response: unknown): boolean {
+  if (!isObject(response) || !isObject(response.headers)) return false;
+  return Object.entries(response.headers).some(
+    ([name, header]) =>
+      name.toLowerCase() === "location" &&
+      isObject(header) &&
+      ("$ref" in header || isObject(header.schema)),
+  );
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 // Skip non-operation keys such as parameters and $ref.

@@ -35,6 +35,9 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/setup
 
+      - name: Audit dependencies
+        run: bun run audit
+
       - run: bun x turbo run quality check-types $TURBO_AFFECTED
       # Keep typegen and build sequential: both write to .next.
       - run: bun x turbo run build $TURBO_AFFECTED
@@ -62,6 +65,7 @@ jobs:
       - uses: ./.github/actions/setup
 
       - run: bun x turbo run test $TURBO_AFFECTED
+      - run: bun run test:release
 
   e2e-tests:
     runs-on: ubuntu-latest

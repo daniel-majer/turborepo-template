@@ -9,30 +9,31 @@ import { map, Observable } from "rxjs";
 
 import { RAW_RESPONSE } from "./raw-response.decorator.js";
 
-export interface Envelope<T> {
+export interface Envelope<T, M = unknown> {
   data: T | null;
-  meta?: unknown;
+  meta?: M;
 }
 
 // Explicit marker avoids confusing payload fields with envelopes.
 // A string survives cache JSON serialization; it is stripped from the response.
 const ENVELOPE_MARKER = "__envelope__";
 
-type MarkedEnvelope<T> = Envelope<T> & { [ENVELOPE_MARKER]: true };
+type MarkedEnvelope<T, M = unknown> = Envelope<T, M> & {
+  [ENVELOPE_MARKER]: true;
+};
 
 /**
  * Add metadata with envelope(data, meta); plain values are wrapped automatically.
  * Hand-built { data } objects are treated as payloads, not envelopes.
  */
-export function envelope<T>(
+export function envelope<T, M = unknown>(
   data: T | null | undefined,
-  meta?: unknown,
-): Envelope<NonNullable<T>> {
+  meta?: M,
+): Envelope<NonNullable<T>, M> {
   // Use null so JSON retains the required data field.
-  const value: MarkedEnvelope<NonNullable<T>> =
-    meta === undefined
-      ? { data: data ?? null, [ENVELOPE_MARKER]: true }
-      : { data: data ?? null, meta, [ENVELOPE_MARKER]: true };
+  const value: MarkedEnvelope<NonNullable<T>, M> = meta === undefined
+    ? { data: data ?? null, [ENVELOPE_MARKER]: true }
+    : { data: data ?? null, meta, [ENVELOPE_MARKER]: true };
 
   return value;
 }

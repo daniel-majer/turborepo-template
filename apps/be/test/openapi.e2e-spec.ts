@@ -61,7 +61,7 @@ describe("OpenAPI document (e2e)", () => {
   const t = useTestApp({ controllers: [BoomController] });
 
   const spec = async (): Promise<Spec> => {
-    const res = await t.app.inject({ method: "GET", url: "/docs-json" });
+    const res = await t.app.inject({ method: "GET", url: "/api/docs-json" });
     expect(res.statusCode).toBe(200);
     return res.json<Spec>();
   };
@@ -70,7 +70,7 @@ describe("OpenAPI document (e2e)", () => {
     const doc = await spec();
 
     expect(doc.openapi).toMatch(/^3\./);
-    expect(Object.keys(doc.paths)).toContain("/users");
+    expect(Object.keys(doc.paths)).toContain("/api/users");
   });
 
   it("matches the committed openapi.json", async () => {
@@ -81,7 +81,7 @@ describe("OpenAPI document (e2e)", () => {
 
     // Compare the full contract, excluding the test-only route. Update with bun run api:sync.
     const paths = Object.fromEntries(
-      Object.entries(doc.paths).filter(([path]) => path !== "/boom"),
+      Object.entries(doc.paths).filter(([path]) => path !== "/api/boom"),
     );
 
     expect({ ...doc, paths }).toEqual(committed);
@@ -106,21 +106,29 @@ describe("OpenAPI document (e2e)", () => {
     it("documents a list as an array inside the data envelope", async () => {
       const doc = await spec();
 
-      expect(schemaOf(doc, "/users", "get", "200")).toEqual({
+      expect(schemaOf(doc, "/api/users", "get", "200")).toEqual({
         type: "object",
-        required: ["data"],
+        required: ["data", "meta"],
         properties: {
           data: {
             type: "array",
             items: { $ref: "#/components/schemas/UserDto" },
           },
+          meta: { $ref: "#/components/schemas/UsersPageMetaDto" },
+        },
+      });
+      expect(doc.components.schemas.UsersPageMetaDto).toMatchObject({
+        required: ["nextCursor", "hasNextPage"],
+        properties: {
+          nextCursor: { type: "integer", nullable: true },
+          hasNextPage: { type: "boolean" },
         },
       });
     });
 
     it("documents no meta on a route that never sends one", async () => {
       const doc = await spec();
-      const schema = schemaOf(doc, "/users/{id}", "get", "200");
+      const schema = schemaOf(doc, "/api/users/{id}", "get", "200");
 
       // Metadata must be explicitly enabled with { meta: true }.
       expect(properties(schema)).toEqual(["data"]);
@@ -129,20 +137,20 @@ describe("OpenAPI document (e2e)", () => {
     it("documents create as 201, not 200", async () => {
       const doc = await spec();
 
-      expect(doc.paths["/users"]?.post?.responses["200"]).toBeUndefined();
-      expect(schemaOf(doc, "/users", "post", "201")).toBeDefined();
+      expect(doc.paths["/api/users"]?.post?.responses["200"]).toBeUndefined();
+      expect(schemaOf(doc, "/api/users", "post", "201")).toBeDefined();
     });
 
     it("matches the envelope the interceptor really sends", async () => {
       await t.app.inject({
         method: "POST",
-        url: "/users",
+        url: "/api/users",
         payload: { email: "ada@example.com" },
       });
 
-      const res = await t.app.inject({ method: "GET", url: "/users" });
+      const res = await t.app.inject({ method: "GET", url: "/api/users" });
 
-      expect(Object.keys(res.json())).toEqual(["data"]);
+      expect(Object.keys(res.json())).toEqual(["data", "meta"]);
       expect(Array.isArray(res.json().data)).toBe(true);
     });
   });
@@ -163,7 +171,7 @@ describe("OpenAPI document (e2e)", () => {
 
     it("needs no per-status decorator on a route that can 404", async () => {
       const doc = await spec();
-      const findOne = doc.paths["/users/{id}"]?.get;
+      const findOne = doc.paths["/api/users/{id}"]?.get;
 
       expect(Object.keys(findOne?.responses ?? {})).toEqual(["200", "default"]);
     });
@@ -173,7 +181,7 @@ describe("OpenAPI document (e2e)", () => {
       const envelope = doc.components.schemas.ErrorEnvelopeDto ?? {};
       const error = doc.components.schemas.ApiErrorDto ?? {};
 
-      const res = await t.app.inject({ method: "GET", url: "/users/999" });
+      const res = await t.app.inject({ method: "GET", url: "/api/users/999" });
       const body = res.json();
 
       expect(res.statusCode).toBe(404);
@@ -196,7 +204,7 @@ describe("OpenAPI document (e2e)", () => {
 
       const res = await t.app.inject({
         method: "POST",
-        url: "/users",
+        url: "/api/users",
         payload: { email: "not-an-email" },
       });
 
@@ -212,7 +220,7 @@ describe("OpenAPI document (e2e)", () => {
       const doc = await spec();
       const error = doc.components.schemas.ApiErrorDto ?? {};
 
-      const res = await t.app.inject({ method: "GET", url: "/boom" });
+      const res = await t.app.inject({ method: "GET", url: "/api/boom" });
       const body = res.json();
 
       expect(res.statusCode).toBe(500);
@@ -227,19 +235,19 @@ describe("OpenAPI document (e2e)", () => {
       const doc = await spec();
       const created = await t.app.inject({
         method: "POST",
-        url: "/users",
+        url: "/api/users",
         payload: { email: "ada@example.com" },
       });
 
       const res = await t.app.inject({
         method: "DELETE",
-        url: `/users/${created.json().data.id}`,
+        url: `/api/users/${created.json().data.id}`,
       });
 
       expect(res.statusCode).toBe(204);
       expect(res.payload).toBe("");
       expect(
-        doc.paths["/users/{id}"]?.delete?.responses["204"]?.content,
+        doc.paths["/api/users/{id}"]?.delete?.responses["204"]?.content,
       ).toBeUndefined();
     });
   });

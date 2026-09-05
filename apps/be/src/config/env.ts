@@ -18,6 +18,10 @@ export const LOG_LEVELS = [
   "silent",
 ] as const;
 
+export const cacheNamespaceSchema = z.string().regex(/^[A-Za-z0-9_-]+$/, {
+  error: "must contain only letters, digits, underscores or hyphens",
+});
+
 // TODO(template): add new variables here, in .env.example and in their *.config.ts.
 export const envSchema = z.object({
   NODE_ENV: z
@@ -29,7 +33,7 @@ export const envSchema = z.object({
   DATABASE_URL: urlWithScheme(/^postgres(ql)?$/, "postgres://"),
   REDIS_URL: urlWithScheme(/^rediss?$/, "redis://"),
   // Required: isolates cache keys and bounds clear() to one project.
-  CACHE_NAMESPACE: z.string().min(1),
+  CACHE_NAMESPACE: cacheNamespaceSchema,
   // Comma-separated browser origins; empty allows none. No credentialed wildcards.
   CORS_ORIGINS: z.string().default(""),
 });

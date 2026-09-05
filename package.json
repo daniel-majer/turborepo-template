@@ -11,7 +11,9 @@
     "setup": "[ -f apps/be/.env ] || cp apps/be/.env.example apps/be/.env; [ -f apps/fe/.env ] || cp apps/fe/.env.example apps/fe/.env",
     "check-types": "turbo run check-types",
     "api:sync": "bun run --cwd apps/be api:spec && bun run --cwd packages/api-client generate",
-    "test": "turbo run test",
+    "audit": "bun audit",
+    "test": "turbo run test && bun run test:release",
+    "test:release": "node --test scripts/promote-images.test.mjs",
     "test:e2e": "turbo run test:e2e",
     "verify:images": "bash scripts/verify-images.sh",
     "lint": "oxlint .",
@@ -32,6 +34,12 @@
     "oxlint-tsgolint": "^7.0.2001",
     "turbo": "^2.10.12",
     "typescript": "^6"
+  },
+  "overrides": {
+    "deepmerge-ts": "8.0.2",
+    "lodash": "4.18.1",
+    "mysql2": "3.24.3",
+    "valibot": "1.4.2"
   },
   "engines": {
     "node": ">=22.12.0"

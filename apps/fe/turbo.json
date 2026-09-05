@@ -5,6 +5,9 @@
     "check-types": {
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/types/**", "next-env.d.ts", "tsconfig.tsbuildinfo"]
+    },
+    "test": {
+      "dependsOn": ["transit", "^generate"]
     }
   }
 }
