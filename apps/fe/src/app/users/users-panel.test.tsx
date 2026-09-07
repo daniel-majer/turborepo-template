@@ -3,7 +3,13 @@ import {
   type UsersFindAll200,
 } from "@repo/api-client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Suspense } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,6 +33,14 @@ const clients: QueryClient[] = [];
 
 function page(data = [ada], nextCursor: number | null = null): UsersFindAll200 {
   return { data, meta: { nextCursor, hasNextPage: nextCursor !== null } };
+}
+
+function deferredResponse() {
+  let resolve!: (response: Response) => void;
+  const promise = new Promise<Response>((resolveResponse) => {
+    resolve = resolveResponse;
+  });
+  return { promise, resolve };
 }
 
 function mount(initialPage = page()) {
@@ -167,6 +181,144 @@ describe("UsersPanel", () => {
       "https://api.example.com/api/users/1",
       expect.objectContaining({ method: "DELETE" }),
     );
+  });
+
+  it("keeps a pending creation and its eventual error when removing another user", async () => {
+    const createResponse = deferredResponse();
+    const requestId = "a61eb8df-5c8c-4bfb-8a22-908d30240e86";
+    fetchMock.mockImplementation(async (_url, options) => {
+      if (options?.method === "POST") return createResponse.promise;
+      if (options?.method === "DELETE") return Response.json({ data: ada });
+      return Response.json(page([grace]));
+    });
+    const { user } = mount(page([ada, grace]));
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Email" }),
+      grace.email,
+    );
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Add" })).toHaveProperty(
+        "disabled",
+        true,
+      ),
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: `Remove ${ada.email}` }),
+    );
+    await waitFor(() => expect(screen.queryByText(ada.email)).toBeNull());
+    expect
+      .soft(screen.getByRole("button", { name: "Add" }))
+      .toHaveProperty("disabled", true);
+
+    createResponse.resolve(
+      Response.json(
+        {
+          data: null,
+          error: {
+            statusCode: 409,
+            message: "Email already exists",
+            timestamp: ada.createdAt,
+            path: "/users",
+            requestId,
+          },
+        },
+        { status: 409 },
+      ),
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("Email already exists");
+    expect(alert.textContent).toContain(requestId);
+    expect(screen.getByRole("button", { name: "Add" })).toHaveProperty(
+      "disabled",
+      false,
+    );
+  });
+
+  it("keeps a pending removal and its eventual error when creating a user", async () => {
+    const removeResponse = deferredResponse();
+    const requestId = "ed0c4edc-e32a-4b5f-9b96-c7d87f67e65c";
+    fetchMock.mockImplementation(async (_url, options) => {
+      if (options?.method === "DELETE") return removeResponse.promise;
+      if (options?.method === "POST")
+        return Response.json({ data: grace }, { status: 201 });
+      return Response.json(page([ada, grace]));
+    });
+    const { user } = mount();
+
+    await user.click(
+      screen.getByRole("button", { name: `Remove ${ada.email}` }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: `Remove ${ada.email}` }),
+      ).toHaveProperty("disabled", true),
+    );
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Email" }),
+      grace.email,
+    );
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    expect(await screen.findByText(grace.email)).toBeDefined();
+    expect
+      .soft(screen.getByRole("button", { name: `Remove ${ada.email}` }))
+      .toHaveProperty("disabled", true);
+    expect
+      .soft(screen.getByRole("button", { name: `Remove ${grace.email}` }))
+      .toHaveProperty("disabled", true);
+
+    removeResponse.resolve(
+      Response.json(
+        {
+          data: null,
+          error: {
+            statusCode: 503,
+            message: "Database unavailable",
+            timestamp: ada.createdAt,
+            path: "/users/1",
+            requestId,
+          },
+        },
+        { status: 503 },
+      ),
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("Database unavailable");
+    expect(alert.textContent).toContain(requestId);
+    expect(screen.getByText(ada.email)).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: `Remove ${ada.email}` }),
+    ).toHaveProperty("disabled", false);
+  });
+
+  it("ignores form submissions while a creation is pending", async () => {
+    const createResponse = deferredResponse();
+    fetchMock.mockImplementation(async (_url, options) => {
+      if (options?.method === "POST") return createResponse.promise;
+      return Response.json(page([ada, grace]));
+    });
+    const { user } = mount();
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Email" }),
+      grace.email,
+    );
+    const addButton = screen.getByRole("button", { name: "Add" });
+    await user.click(addButton);
+    await waitFor(() => expect(addButton).toHaveProperty("disabled", true));
+
+    fireEvent.submit(addButton.closest("form")!);
+    createResponse.resolve(Response.json({ data: grace }, { status: 201 }));
+
+    expect(await screen.findByText(grace.email)).toBeDefined();
+    expect(
+      fetchMock.mock.calls.filter(([, options]) => options?.method === "POST"),
+    ).toHaveLength(1);
   });
 
   it("keeps the list and reports a failed removal", async () => {

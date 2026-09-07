@@ -36,8 +36,11 @@ export function UsersPanel() {
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (create.isPending) return;
+
+    // Reset detaches mutation tracking without cancelling the request.
     create.reset();
-    remove.reset();
+    if (!remove.isPending) remove.reset();
 
     // Match CreateUserDto normalization; OpenAPI does not capture @Transform.
     const parsed = UsersCreateBody.safeParse({
@@ -96,7 +99,7 @@ export function UsersPanel() {
               disabled={remove.isPending || isNavigating}
               onClick={() => {
                 setError(undefined);
-                create.reset();
+                if (!create.isPending) create.reset();
                 remove.mutate({ id: user.id });
               }}
             >
