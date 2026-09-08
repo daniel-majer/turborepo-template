@@ -94,7 +94,10 @@ files that cannot contain comments:
   lines at the top of both Dockerfiles list every workspace package (add yours),
   the `name:` in `docker-compose.prod.yml` must be unique per host, and the
   `NEXT_PUBLIC_APP_URL` / `NEXT_PUBLIC_API_URL` repository variables feed the
-  frontend image's build args.
+  frontend image's build args. GitHub does not copy variables to repositories
+  created from a template, so set them before the first push to `main`. This
+  template repository itself uses the CI's localhost placeholders, so its
+  published images only suit a local run.
 
 Everything else — `turbo.json`, git hooks, `commitlint`, the tsconfig presets and
 `components.json` — is project-agnostic and needs no changes.
@@ -337,9 +340,11 @@ added there and the QEMU step uncommented. And `NEXT_PUBLIC_*` variables are
 compiled into the frontend bundle, so they belong in the build args of the
 workflow (the `NEXT_PUBLIC_APP_URL` and `NEXT_PUBLIC_API_URL` repository
 variables), not in the environment of the running container, where they would
-be ignored. `NEXT_PUBLIC_API_URL` is required even when other build-time env
-validation is skipped, so a release cannot silently fall back to a relative
-base.
+be ignored. The release job checks both variables before building the frontend
+image and fails with a pointer to the settings page when either is missing.
+`NEXT_PUBLIC_API_URL` is also required by the build itself even when other
+build-time env validation is skipped, so a release cannot silently fall back to
+a relative base.
 
 ## Git hooks
 

@@ -49,6 +49,31 @@ jobs:
             file: apps/be/Dockerfile
             target: migrate
     steps:
+      # Fail before any Docker work when the frontend's public URLs are missing.
+      - name: Check frontend build variables
+        if: matrix.app == 'fe'
+        env:
+          NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+        run: |
+          status=0
+          for name in NEXT_PUBLIC_APP_URL NEXT_PUBLIC_API_URL; do
+            case "${!name}" in
+              http://?* | https://?*) ;;
+              "")
+                echo "::error::Repository variable $name is not set."
+                status=1 ;;
+              *)
+                echo "::error::Repository variable $name must be an absolute HTTP(S) URL, got '${!name}'."
+                status=1 ;;
+            esac
+          done
+          if [ "$status" -ne 0 ]; then
+            echo "Set the variables under Settings > Secrets and variables > Actions > Variables," \
+              "or run: gh variable set NAME --body https://..."
+          fi
+          exit "$status"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # - name: Enable emulation for foreign architectures
