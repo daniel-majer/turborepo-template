@@ -44,8 +44,12 @@
       "dependsOn": ["//#lint:fix", "//#format:fix"],
       "cache": false
     },
-    "//#lint": {},
+
+    "//#lint": {
+      "dependsOn": ["be#db:generate", "@repo/api-client#generate"]
+    },
     "//#lint:fix": {
+      "dependsOn": ["be#db:generate", "@repo/api-client#generate"],
       "cache": false
     },
     "//#format": {},
