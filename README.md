@@ -53,20 +53,30 @@ when upgrading Prisma rather than removing them blindly.
 
 ## Make it yours
 
-After cloning, resolve every `TODO(template)` marker and adjust the remaining
-files that cannot contain comments:
+After cloning, resolve the `TODO(template)` markers for your project and
+deployment, then remove the resolved comments. They mark sample content and
+project-specific setup; guidance for optional extensions uses ordinary comments.
+Find the markers, including those in `.env` examples and GitHub workflows, with:
+
+```sh
+rg --hidden --line-number --fixed-strings 'TODO(template)' --glob '!.git' .
+```
+
+Files that cannot contain comments are called out below.
 
 - **`apps/fe/.env`** — create it from the example (`cp apps/fe/.env.example apps/fe/.env`).
   Without it the build fails immediately: `src/env.ts` validates both public
-  URLs. For production, set their real values and update `.github/workflows/ci.yml`.
+  URLs. For production, set their real values and the repository variables used
+  by `.github/workflows/release.yml`. CI can keep its local test URLs.
 - **`apps/fe/src/app/layout.tsx`** — replace the template `title` and `description`
   metadata, and change `lang="en"` if the app is in another language.
 - **Root `package.json`** — rename `"turborepo-template"` to your project (JSON
   does not support an inline TODO comment).
-- **README files** — rewrite the root and app-specific documentation for your
-  project.
+- **README files** — replace template introductions with your project description.
+  Update app-specific documentation as its behavior changes.
 - **`LICENSE`** — the template is MIT-0, so you can delete or replace it freely;
-  pick whatever license fits your project.
+  pick whatever license fits your project, update the holder/year for your own
+  code, and align the `license` field in `packages/ts-config/package.json`.
 - **`apps/be`** — a NestJS app on Fastify (ESM + vitest, port 3001) with zod-validated
   env, Prisma + Postgres, a Redis cache, pino logging, a global `ValidationPipe`
   and a catch-all exception filter. Postgres and Redis run via Docker; the quick
@@ -78,8 +88,18 @@ files that cannot contain comments:
   `apps/fe/package.json`, delete `apps/fe/src/app/users/`, drop
   `NEXT_PUBLIC_API_URL` / `API_URL` from `apps/fe/src/env.ts` and `.env.example`,
   and remove the `api:sync` script here. Then `bun install`.
-- **`apps/fe/public/` and fonts** — swap the favicon/assets and the Geist fonts in
-  `layout.tsx` for your own branding.
+- **Optional branding** — the default fonts and palettes can stay. If you change
+  the fonts in `layout.tsx`, keep `apps/fe/src/app/globals.css` aligned. Shared
+  palettes live in `packages/ui/src/styles/globals.css`; public assets and crawling
+  rules live in `apps/fe/public/`.
+- **Sample domain** — replace the Prisma `User` model, seed data, backend
+  `users/` module, cached hello endpoint and frontend `src/app/users/` example.
+  Add authentication and authorization before handling real data, including
+  passing the visitor's credentials to server-side API calls. Update the sample
+  tests and `scripts/verify-images.mjs`, then run `bun run api:sync`.
+- **Project policies** — adapt the template-specific wording in `CONTRIBUTING.md`,
+  `SECURITY.md` and the GitHub issue forms. Enable private vulnerability reporting
+  and Renovate in the new repository.
 - **CI** — `ci.yml` runs four parallel jobs (checks, unit tests, API e2e tests,
   production-image smoke) on pull requests, and again as the first job of every
   release; adjust for your
@@ -90,17 +110,18 @@ files that cannot contain comments:
 - **Deployment** — `apps/*/Dockerfile`, `docker-compose.prod.yml`,
   `.env.production.example` and `.github/workflows/release.yml` ship the apps as
   API, frontend and migration images, see [Deployment](#deployment). After
-  cloning, update the `COPY`
-  lines at the top of both Dockerfiles list every workspace package (add yours),
-  the `name:` in `docker-compose.prod.yml` must be unique per host, and the
+  cloning, the `name:` in `docker-compose.prod.yml` must be unique per host, and the
   `NEXT_PUBLIC_APP_URL` / `NEXT_PUBLIC_API_URL` repository variables feed the
   frontend image's build args. GitHub does not copy variables to repositories
   created from a template, so set them before the first push to `main`. This
   template repository itself uses the CI's localhost placeholders, so its
-  published images only suit a local run.
+  published images only suit a local run. If you add workspaces, update the
+  Dockerfile `COPY` lists to include their manifests and required sources.
 
-Everything else — `turbo.json`, git hooks, `commitlint`, the tsconfig presets and
-`components.json` — is project-agnostic and needs no changes.
+The tooling defaults work as shipped. When adding server environment variables,
+update `turbo.json`; when adding or renaming packages, review the Dockerfiles,
+release image lists and `commitlint` scopes. The tsconfig presets and
+`components.json` need no changes unless you customize their conventions.
 
 ## Commands
 

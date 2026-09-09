@@ -11,7 +11,7 @@ COPY --from=oven/bun:1.3.14-alpine /usr/local/bin/bun /usr/local/bin/bun
 FROM tooling AS deps
 WORKDIR /app
 
-# TODO(template): add a COPY line for each new workspace.
+# Add a manifest COPY line here when adding a workspace.
 COPY package.json bun.lock ./
 COPY apps/be/package.json apps/be/
 COPY apps/fe/package.json apps/fe/
@@ -28,6 +28,7 @@ RUN --mount=type=cache,id=bun-install,target=/root/.bun/install/cache \
 FROM deps AS build
 WORKDIR /app
 
+# Copy any new workspace dependencies needed for the frontend build.
 COPY apps/fe apps/fe
 COPY packages/api-client packages/api-client
 COPY packages/ts-config packages/ts-config
@@ -40,7 +41,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Skip build-time validation; instrumentation validates again at startup.
 ENV SKIP_ENV_VALIDATION=true
 
-# TODO(template): add an ARG/ENV pair for each build-time public variable.
+# Add an ARG/ENV pair here for any new build-time public variables.
 ARG NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 # Required public API address; never fall back to frontend routes.

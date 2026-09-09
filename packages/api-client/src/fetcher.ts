@@ -1,4 +1,4 @@
-/** Shared transport for generated calls. TODO(template): add auth headers here. */
+/** Shared transport for generated calls. */
 
 /** No HTTP response: network failure, CORS or cancellation. */
 export const NETWORK_ERROR_STATUS = 0;
@@ -105,6 +105,7 @@ async function request(url: string, options: RequestInit): Promise<Response> {
   const target = resolveUrl(url);
 
   try {
+    // Add bearer-token headers here if your API uses token authentication.
     return await fetch(target, {
       // Include cookies for API sessions.
       credentials: "include",

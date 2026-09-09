@@ -11,10 +11,14 @@ import { UsersPanel } from "./users-panel";
 /** Fetch user data per request, never during builds without a running API. */
 export const dynamic = "force-dynamic";
 
+// TODO(template): Replace demo route.
+// Includes users-panel.tsx and the local development guidance in error.tsx.
 /** Prefetch into a per-request cache; HydrationBoundary passes it to the client. */
 export default async function UsersPage() {
   const queryClient = new QueryClient();
 
+  // TODO(template): Forward server authentication.
+  // Server-side fetches do not inherit the visitor's cookies or authorization headers.
   await prefetchUsersFindAllQuery(queryClient);
 
   return (

@@ -22,7 +22,7 @@ export const cacheNamespaceSchema = z.string().regex(/^[A-Za-z0-9_-]+$/, {
   error: "must contain only letters, digits, underscores or hyphens",
 });
 
-// TODO(template): add new variables here, in .env.example and in their *.config.ts.
+// Add new variables here, in .env.example and in their *.config.ts.
 export const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])

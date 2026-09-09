@@ -129,6 +129,7 @@ async function main() {
     WEB_PORT: String(webPort),
   };
 
+  // Keep this list aligned with the release.yml image matrix.
   const images = [
     { app: "be", file: "apps/be/Dockerfile", target: "runtime" },
     { app: "migrate", file: "apps/be/Dockerfile", target: "migrate" },
@@ -231,6 +232,8 @@ async function main() {
   assert.equal(notFound.headers.get("x-request-id"), error.error.requestId);
   await request(`${api}/docs-json`, 404);
 
+  // TODO(template): Adapt demo checks.
+  // Keep CRUD, validation and SSR coverage when replacing /users or adding authentication.
   const preflight = await request(`${api}/users/1`, 204, {
     method: "OPTIONS",
     headers: { Origin: web, "Access-Control-Request-Method": "DELETE" },
@@ -316,6 +319,7 @@ async function main() {
       data: { status: "degraded", checks: { database: "up", cache: "down" } },
     });
   });
+  // Keep this assertion aligned with the cached endpoint when replacing the hello demo.
   assert.deepEqual(await (await request(api)).json(), {
     data: "Hello World!",
   });

@@ -3,7 +3,7 @@ import { config } from "dotenv";
 
 import { PrismaClient } from "./generated/client.js";
 
-// TODO(template): replace sample data with schema changes; run explicitly with bun run db:seed.
+// Run explicitly with bun run db:seed; keep seed data aligned with the schema.
 
 // Load env using the same rule as prisma.config.ts.
 const isTest = process.env.NODE_ENV === "test";
@@ -13,6 +13,7 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL ?? "" }),
 });
 
+// TODO(template): Replace sample data.
 const EMAILS = ["ada@example.com", "grace@example.com"];
 
 async function seed() {

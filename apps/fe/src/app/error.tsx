@@ -11,7 +11,7 @@ export default function Error({
   retry: () => void;
 }) {
   useEffect(() => {
-    // Replace with your error reporting service.
+    // Send errors to your reporting service here if needed.
     console.error(error);
   }, [error]);
 

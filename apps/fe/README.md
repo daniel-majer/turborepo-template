@@ -1,6 +1,6 @@
 # fe
 
-<!-- TODO(template): Rewrite this app README for your project. -->
+<!-- TODO(template): Update project introduction. -->
 
 Next.js frontend of the [turborepo-template](../../README.md) monorepo.
 

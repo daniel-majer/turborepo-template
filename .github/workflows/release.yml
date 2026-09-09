@@ -4,6 +4,7 @@ name: Release
 
 on:
   push:
+    # Adjust these refs if your release branching or tag convention changes.
     branches: [main]
     tags: ["v*"]
   workflow_dispatch:
@@ -19,7 +20,7 @@ permissions:
 # Pin actions to immutable commits; Renovate updates them.
 
 env:
-  # TODO(template): for ARM, add linux/arm64 and enable the QEMU step below.
+  # For ARM hosts, add linux/arm64 and enable the QEMU step below.
   PLATFORMS: linux/amd64
 
 jobs:
@@ -37,7 +38,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TODO(template): add new images here and in the promotion step.
+        # When adding images, also update promotion aliases and both scripts/*-images.mjs lists.
         include:
           - app: be
             file: apps/be/Dockerfile
@@ -112,7 +113,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # TODO(template): set these repository variables; add build args for new public values.
+          # TODO(template): Set repository URLs.
+          # Add build args here for any new NEXT_PUBLIC_* variables.
           # NEXT_PUBLIC_* values are baked into browser code. Never put secrets here.
           build-args: |
             NEXT_PUBLIC_APP_URL=${{ vars.NEXT_PUBLIC_APP_URL }}
@@ -167,6 +169,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
+          # Keep aliases aligned with the image matrix above.
           images: |
             ghcr.io/${{ github.repository }}/be
             ghcr.io/${{ github.repository }}/fe

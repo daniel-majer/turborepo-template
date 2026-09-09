@@ -3,6 +3,7 @@ export default {
   extends: ["@commitlint/config-conventional"],
   rules: {
     "scope-empty": [2, "never"],
+    // When adding or renaming scopes, also update the help in .husky/commit-msg.
     "scope-enum": [
       2,
       "always",

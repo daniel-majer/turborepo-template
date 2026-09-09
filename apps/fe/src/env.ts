@@ -8,6 +8,7 @@ const publicApiUrl = validateApiBaseUrl(
   "NEXT_PUBLIC_API_URL",
 );
 
+// Keep added variables aligned across server/client, runtimeEnv, .env.example and deployment.
 export const env = createEnv({
   server: {
     NODE_ENV: z.enum(["development", "test", "production"]),

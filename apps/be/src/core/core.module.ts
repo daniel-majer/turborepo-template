@@ -43,6 +43,7 @@ import { HealthModule } from "../health/health.module.js";
             ignore: (request) =>
               request.url?.startsWith(`/${API_PREFIX}/health`) ?? false,
           },
+          // Extend this list when adding headers that carry sensitive values.
           redact: [
             "req.headers.authorization",
             "req.headers.cookie",

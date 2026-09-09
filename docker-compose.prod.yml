@@ -127,6 +127,7 @@ services:
         condition: service_healthy
     tmpfs:
       - /tmp
+    # Pass any new backend environment variables here.
     environment:
       NODE_ENV: production
       PORT: 3001
@@ -136,7 +137,7 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       # Use a unique namespace per project.
       CACHE_NAMESPACE: ${CACHE_NAMESPACE:?set CACHE_NAMESPACE in .env}
-      # TODO(template): allowed frontend origins; empty disables cross-origin access.
+      # Allowed frontend origins from .env; empty disables cross-origin access.
       CORS_ORIGINS: ${CORS_ORIGINS:-}
     ports:
       # Expose apps only to the host's TLS reverse proxy.
@@ -163,6 +164,7 @@ services:
       - /tmp
       # Writable Next image/data cache.
       - /app/apps/fe/.next/cache
+    # Pass any new server-only frontend variables here.
     environment:
       NODE_ENV: production
       # Set NEXT_PUBLIC_* in release build args, not at runtime.

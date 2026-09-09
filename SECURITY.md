@@ -2,6 +2,8 @@
 
 ## Reporting a vulnerability
 
+<!-- TODO(template): Configure private reporting. -->
+
 Use the repository's **Security → Advisories → Report a vulnerability** button
 to contact the maintainers privately. Include the affected revision, reproduction
 steps, impact and a minimal proof of concept without real credentials or personal
@@ -10,6 +12,8 @@ data. Do not post an exploitable vulnerability in a public issue or pull request
 Repository owners must enable GitHub private vulnerability reporting before
 publishing this template. If the button is unavailable on a fork, ask its owner
 to enable a private reporting channel without disclosing exploit details.
+
+<!-- TODO(template): Adapt support policy. -->
 
 Fixes target the current default branch; older template snapshots do not have
 a separate patch-support commitment. Projects generated from this template
@@ -27,6 +31,8 @@ and rate limits, secrets, database backups and a tested restore procedure,
 monitoring and alerting. Keep the stores private, retain the restricted runtime
 database role, and review migrations for compatibility with application rollbacks.
 Changing an image tag does not roll back a database migration.
+
+<!-- TODO(template): Enable dependency updates. -->
 
 Enable dependency updates and review the resulting PRs. `renovate.json` is
 configuration only: the Renovate GitHub App (or a self-hosted runner) must be

@@ -4,6 +4,7 @@ import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { AppService } from "./app.service.js";
 import { ApiDataResponse } from "./common/api-data-response.decorator.js";
 
+// TODO(template): Replace demo endpoint.
 @ApiTags("app")
 @Controller()
 export class AppController {

@@ -7,7 +7,7 @@ import { Providers } from "./providers";
 
 import "./globals.css";
 
-// TODO(template): Replace these fonts if they are not part of your branding.
+// If you replace these fonts, keep the variables in globals.css aligned.
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -21,7 +21,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   // Makes relative URLs in Open Graph and canonical tags absolute.
   metadataBase: new URL(env.NEXT_PUBLIC_APP_URL),
-  // TODO(template): Replace the title and description with your product metadata.
+  // TODO(template): Set product metadata.
   title: {
     default: "Turborepo Template",
     template: "%s | Turborepo Template",

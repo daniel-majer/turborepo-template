@@ -8,9 +8,10 @@ on:
 # CI runs checks directly; disable hooks.
 env:
   HUSKY: 0
-  # TODO(template): public URLs used during CI prerendering.
+  # Test placeholders for CI prerendering; production URLs belong in release.yml variables.
   NEXT_PUBLIC_APP_URL: "http://localhost:3000"
   NEXT_PUBLIC_API_URL: "http://localhost:3001"
+  # Optional remote cache; without these values, the local Actions cache still works.
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
   # Check affected packages on PRs; releases check everything.
@@ -20,6 +21,7 @@ env:
 # Cancel superseded runs, except on main.
 concurrency:
   group: ci-${{ github.ref }}
+  # Adjust this exception if the default branch is renamed.
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:

@@ -1,5 +1,7 @@
 # Contributing
 
+<!-- TODO(template): Rewrite contribution intro. -->
+
 Keep the template small and reusable. Bug fixes, reproducibility improvements
 and focused examples are welcome; discuss new infrastructure or product-specific
 features in an issue before implementing them. Use [SECURITY.md](SECURITY.md)

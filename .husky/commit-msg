@@ -1,6 +1,7 @@
 if ! bun x commitlint --edit "$1"; then
   echo ""
   echo "  Format: <type>(<scope>): <subject>"
+  # Keep this help aligned with commitlint.config.mjs when scopes change.
   echo "  Scope is required and must be one of: fe, be, tooling, deps, deps-dev"
   echo ""
   echo "  Examples:"

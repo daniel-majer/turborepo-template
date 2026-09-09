@@ -26,6 +26,8 @@ import { UsersPageMetaDto } from "./dto/users-page-meta.dto.js";
 import { UsersQueryDto } from "./dto/users-query.dto.js";
 import { UsersService } from "./users.service.js";
 
+// TODO(template): Protect/remove sample endpoints.
+// Add authentication and authorization before using real data.
 // swagger.setup.ts adds the shared error response to every operation.
 @ApiTags("users")
 @Controller("users")

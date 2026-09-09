@@ -17,6 +17,7 @@
       "dependsOn": ["^build", "^generate"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"],
+      // Add new build-time server variables here; NEXT_PUBLIC_* is inferred.
       "env": ["NODE_ENV", "API_URL"],
       // Validation-only flag; it does not affect build output.
       "passThroughEnv": ["SKIP_ENV_VALIDATION"]

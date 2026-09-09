@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
+// Keep this list aligned with the release.yml image matrix.
 export const releaseApps = ["be", "fe", "migrate"];
 
 export function planPromotion({

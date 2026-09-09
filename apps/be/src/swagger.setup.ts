@@ -16,6 +16,8 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
   // Must run before the explorer reads the metadata.
   applyDataResponses();
 
+  // TODO(template): Set API metadata.
+  // Regenerate openapi.json and the client with bun run api:sync afterwards.
   const config = new DocumentBuilder()
     .setTitle("API")
     .setDescription(

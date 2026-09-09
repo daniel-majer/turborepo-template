@@ -7,6 +7,7 @@ import { FastifyAdapter } from "@nestjs/platform-fastify";
 // Run compiled output so Prisma's .js imports resolve.
 const OUTPUT = new URL("../../openapi.json", import.meta.url);
 
+// Add placeholders here for any new required environment variables.
 // Placeholders satisfy env validation; preview mode never connects to these services.
 process.env.DATABASE_URL ??=
   "postgresql://openapi:openapi@localhost:5432/openapi";

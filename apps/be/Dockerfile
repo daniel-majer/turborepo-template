@@ -11,7 +11,7 @@ COPY --from=oven/bun:1.3.14-alpine /usr/local/bin/bun /usr/local/bin/bun
 FROM tooling AS manifests
 WORKDIR /app
 
-# TODO(template): add a COPY line for each new workspace.
+# Add a manifest COPY line here when adding a workspace.
 COPY package.json bun.lock ./
 COPY apps/be/package.json apps/be/
 COPY apps/fe/package.json apps/fe/
@@ -39,6 +39,7 @@ RUN --mount=type=cache,id=bun-install,target=/root/.bun/install/cache \
 FROM deps AS build
 WORKDIR /app
 
+# Copy any new workspace dependencies needed for the backend build.
 COPY apps/be apps/be
 COPY packages/ts-config packages/ts-config
 
@@ -64,6 +65,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Include sources or built output when the backend imports added workspace packages.
 COPY --from=prod-deps /app/node_modules node_modules
 COPY --from=prod-deps /app/apps/be/node_modules apps/be/node_modules
 COPY --from=build /app/apps/be/dist apps/be/dist
@@ -72,7 +74,7 @@ COPY apps/be/package.json apps/be/
 WORKDIR /app/apps/be
 USER node
 
-# TODO(template): keep this port aligned with apps/be/.env.example.
+# Keep this port aligned with apps/be/.env.example if it changes.
 EXPOSE 3001
 
 CMD ["node", "dist/main.js"]

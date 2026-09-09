@@ -6,7 +6,7 @@ services:
   postgres:
     image: postgres:17-alpine
     environment:
-      # Keep these values aligned with the committed `.env.test` file.
+      # Keep credentials, ports and the Postgres healthcheck aligned with .env.test.
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: app_test
