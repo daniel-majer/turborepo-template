@@ -1,6 +1,10 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  QueryErrorResetBoundary,
+} from "@tanstack/react-query";
 import { useState } from "react";
 
 // Retry transient 4xx errors.
@@ -29,7 +33,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <QueryErrorResetBoundary>{children}</QueryErrorResetBoundary>
+    </QueryClientProvider>
   );
 }
 

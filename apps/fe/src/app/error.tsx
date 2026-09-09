@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@repo/ui/components/button";
+import { useQueryErrorResetBoundary } from "@tanstack/react-query";
 import { useEffect } from "react";
 
 export default function Error({
@@ -10,6 +11,8 @@ export default function Error({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
+  const { reset: resetQueries } = useQueryErrorResetBoundary();
+
   useEffect(() => {
     // Send errors to your reporting service here if needed.
     console.error(error);
@@ -32,7 +35,14 @@ export default function Error({
             {error.digest}
           </code>
         ) : null}
-        <Button size="lg" className="mt-8" onClick={() => retry()}>
+        <Button
+          size="lg"
+          className="mt-8"
+          onClick={() => {
+            resetQueries();
+            retry();
+          }}
+        >
           Try again
         </Button>
       </div>

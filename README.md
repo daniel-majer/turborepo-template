@@ -9,7 +9,7 @@ UI components, TypeScript configs and tooling.
 
 |                 |                                                                    |
 | --------------- | ------------------------------------------------------------------ |
-| Package manager | bun 1.3.14                                                         |
+| Package manager | bun 1.4.2                                                          |
 | Build system    | Turborepo 2.10                                                     |
 | Frontend        | Next.js 16 (App Router, Turbopack, React 19)                       |
 | Styling         | Tailwind CSS v4 + shadcn/ui (Base UI, `nova` preset)               |
@@ -46,10 +46,12 @@ OpenAPI spec. `http://localhost:3001/api/docs` is the Swagger UI for the same
 spec, and `http://localhost:3001/api/health/ready` says whether Postgres and
 Redis are reachable.
 
-Use Node 22 (`.nvmrc`, CI and both Docker build/runtime stages) and bun 1.3.14
+Use Node 22 (`.nvmrc`, CI and both Docker build/runtime stages) and bun 1.4.2
 (`packageManager`). The minimum supported Node version is 22.12.0.
-Root overrides keep Prisma's transitive tools on patched releases; recheck them
-when upgrading Prisma rather than removing them blindly.
+Root overrides keep transitive dependencies on patched releases; recheck them
+when upgrading Prisma or Orval rather than removing them blindly. Bun 1.4.2
+supports the version-scoped overrides that patch `js-yaml` 4.x while preserving
+Swagger's 5.x dependency. The resulting lockfile cannot be read by Bun 1.3.14.
 
 ## Make it yours
 
@@ -386,7 +388,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 with a **required** scope:
 
 ```
-<type>(<scope>): <subject>        scope ∈ fe | be | tooling | deps | deps-dev
+<type>(<scope>): <subject>
+scope ∈ fe | be | api-client | ui | ts-config | tooling | deps | deps-dev
 
 feat(fe): add user profile page
 chore(tooling): enable type-aware linting

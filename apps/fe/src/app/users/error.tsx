@@ -1,13 +1,17 @@
 "use client";
 
+import { useQueryErrorResetBoundary } from "@tanstack/react-query";
+
 /** Keep API failures inside this route; Next requires a client error boundary. */
 export default function UsersError({
   error,
-  reset,
+  retry,
 }: {
   error: Error;
-  reset: () => void;
+  retry: () => void;
 }) {
+  const { reset: resetQueries } = useQueryErrorResetBoundary();
+
   return (
     <main className="mx-auto w-full max-w-lg flex-1 px-6 py-24">
       <h1 className="text-3xl font-medium tracking-tight">Users</h1>
@@ -16,7 +20,11 @@ export default function UsersError({
         Is the backend running? <code>bun run dev</code> starts both apps.
       </p>
       <button
-        onClick={reset}
+        onClick={() => {
+          // Allow failed suspense queries to fetch again when Next retries the route.
+          resetQueries();
+          retry();
+        }}
         className="border-border mt-6 rounded-md border px-3 py-2 text-sm"
       >
         Try again

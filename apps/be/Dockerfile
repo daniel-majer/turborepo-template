@@ -5,7 +5,7 @@
 # Use the same Node version for builds and runtime; Bun installs dependencies.
 FROM node:22-alpine AS node-base
 FROM node-base AS tooling
-COPY --from=oven/bun:1.3.14-alpine /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=oven/bun:1.4.2-alpine /usr/local/bin/bun /usr/local/bin/bun
 
 # Keep workspace manifests in a shared cacheable stage.
 FROM tooling AS manifests
